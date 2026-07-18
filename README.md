@@ -103,7 +103,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (see Preferences; currently **1.1.1**)
+- Add-on version (see Preferences; currently **1.1.2**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output
@@ -113,7 +113,7 @@ Please include:
 ## Repository layout
 
 ```
-blender_collada_support/   # installable extension (manifest, I/O, wheels/)
+collada_support/           # installable extension (manifest, I/O, wheels/)
 dist/                      # rebuilt blender_collada_support.zip (local; not in git)
 submission/                # Blender Extensions Platform listing materials
 CONTRIBUTING.md            # developer workflow

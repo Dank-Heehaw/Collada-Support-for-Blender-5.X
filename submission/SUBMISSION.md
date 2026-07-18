@@ -4,7 +4,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 
 | Field / asset | Value or path |
 | --- | --- |
-| Package id | `blender_collada_support` |
+| Package id | `collada_support` |
 | Version | `1.0.4` |
 | Display name | Collada Support for Blender 5.X |
 | License | GPL-3.0-or-later |
