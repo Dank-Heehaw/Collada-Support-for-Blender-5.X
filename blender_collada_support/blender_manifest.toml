@@ -1,13 +1,13 @@
 schema_version = "1.0.0"
 
 id = "blender_collada_support"
-version = "1.0.3"
+version = "1.0.4"
 name = "Blender Collada Support"
 tagline = "COLLADA (.dae) import and export for Blender 5"
 maintainer = "Blender Collade Support"
 type = "add-on"
 
-website = "https://github.com/KimsFerdy/blender_pycollada_importexport"
+website = "https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X"
 tags = ["Import-Export", "Pipeline"]
 
 blender_version_min = "5.0.0"
@@ -21,5 +21,5 @@ wheels = [
 ]
 
 [permissions]
-network = "Optionally reinstall or upgrade pycollada via pip"
+network = "Optionally update or reinstall pycollada via pip"
 files = "Read/write COLLADA .dae/.zae/.kmz/.zip files and textures"

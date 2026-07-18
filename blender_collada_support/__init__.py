@@ -23,12 +23,12 @@
 bl_info = {
     "name": "Blender Collada Support",
     "author": "Tim Knip, Dusan Maliarik, Lawrence D'Oliveiro, Kims Ferdy, Blender Collade Support",
-    "version": (1, 0, 3),
+    "version": (1, 0, 4),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
     "category": "Import-Export",
-    "doc_url": "https://github.com/KimsFerdy/blender_pycollada_importexport",
+    "doc_url": "https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X",
 }
 
 import importlib
@@ -92,10 +92,10 @@ if _ADDON_RELOAD and HAS_COLLADA:
 
 
 class COLLADA_OT_install_pycollada(bpy.types.Operator):
-    """Install pycollada into Blender's user modules folder"""
+    """Update or reinstall pycollada in Blender's user modules folder"""
 
     bl_idname = "collada_support.install_pycollada"
-    bl_label = "Install pycollada"
+    bl_label = "Update / Reinstall pycollada"
     bl_options = {"REGISTER"}
 
     def execute(self, context):
@@ -141,7 +141,7 @@ class COLLADA_OT_install_pycollada(bpy.types.Operator):
             )
             return {"CANCELLED"}
 
-        self.report({"INFO"}, f"pycollada installed to {modules_path}")
+        self.report({"INFO"}, f"pycollada updated/reinstalled in {modules_path}")
         return {"FINISHED"}
 
 
@@ -181,8 +181,8 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
         if not _refresh_collada_status():
             self.report(
                 {"ERROR"},
-                "pycollada is not installed. Open Preferences > Add-ons > "
-                "Blender Collada Support and click Install pycollada.",
+                "Bundled pycollada failed to load. Open Preferences > Add-ons > "
+                "Blender Collada Support and use Update / Reinstall pycollada.",
             )
             return {"CANCELLED"}
 
@@ -262,8 +262,8 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         if not _refresh_collada_status():
             self.report(
                 {"ERROR"},
-                "pycollada is not installed. Open Preferences > Add-ons > "
-                "Blender Collada Support and click Install pycollada.",
+                "Bundled pycollada failed to load. Open Preferences > Add-ons > "
+                "Blender Collada Support and use Update / Reinstall pycollada.",
             )
             return {"CANCELLED"}
 
@@ -288,24 +288,24 @@ class ColladaSupportPreferences(bpy.types.AddonPreferences):
         box.label(text=modules_path)
 
         if not HAS_COLLADA:
-            layout.label(text="pycollada not found (wheels should ship with this add-on).", icon="ERROR")
+            layout.label(text="Bundled pycollada failed to load.", icon="ERROR")
             layout.operator(
                 COLLADA_OT_install_pycollada.bl_idname,
-                text="Install pycollada (fallback)",
-                icon="IMPORT",
+                text="Update / Reinstall pycollada",
+                icon="FILE_REFRESH",
             )
             tip = layout.box()
-            tip.label(text="Prefer reinstalling the add-on zip so bundled wheels load.")
-            tip.label(text="Fallback install needs network once; restart Blender after.")
+            tip.label(text="This optional network fallback replaces the bundled copy.")
+            tip.label(text="Restart Blender after updating or reinstalling.")
         else:
             import collada
 
             version = getattr(collada, "__version__", "unknown")
             layout.label(text=f"pycollada ready (version {version})", icon="CHECKMARK")
-            layout.label(text="Bundled wheels are preferred; pip install is optional.")
+            layout.label(text="Bundled wheels are active; network update is optional.")
             layout.operator(
                 COLLADA_OT_install_pycollada.bl_idname,
-                text="Reinstall / Upgrade pycollada",
+                text="Update / Reinstall pycollada",
                 icon="FILE_REFRESH",
             )
 
@@ -322,7 +322,7 @@ def menu_func_import(self, context):
     label = (
         "COLLADA (.dae, .zae, .kmz, .zip)"
         if HAS_COLLADA
-        else "COLLADA (.dae) [install pycollada first]"
+        else "COLLADA (.dae) [bundled pycollada failed]"
     )
     self.layout.operator(IMPORT_OT_collada.bl_idname, text=label)
 
@@ -331,7 +331,7 @@ def menu_func_export(self, context):
     label = (
         "COLLADA (.dae, .zae)"
         if HAS_COLLADA
-        else "COLLADA (.dae) [install pycollada first]"
+        else "COLLADA (.dae) [bundled pycollada failed]"
     )
     self.layout.operator(EXPORT_OT_collada.bl_idname, text=label)
 

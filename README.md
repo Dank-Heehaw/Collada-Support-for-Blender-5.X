@@ -2,6 +2,9 @@
 
 Restores **COLLADA (`.dae` / `.zae`) import and export** for Blender 5 after native OpenCOLLADA support was removed.
 
+**Project:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
+**Issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
+
 Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada_importexport) → [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport)), with crash/perf hardening guided by Blender **4.5’s native** `MeshImporter` / `DocumentImporter` (batch mesh writes, topology validation, no `bpy.ops` during import).
 
 ## Install
@@ -10,7 +13,7 @@ Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada
 2. Blender 5: **Edit → Preferences → Add-ons → Install…** → select the zip.
 3. Enable **Blender Collada Support**.
 4. `pycollada` is **bundled as wheels** — no install step needed in normal use.
-5. Preferences still offer a pip fallback if wheels fail to load.
+5. Preferences offer **Update / Reinstall pycollada** as an optional network fallback if the bundled wheels fail to load or need updating.
 
 Menus:
 
