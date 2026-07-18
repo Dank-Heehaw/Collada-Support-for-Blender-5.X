@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Blender Collada Support",
     "author": "Tim Knip, Dusan Maliarik, Lawrence D'Oliveiro, Kims Ferdy, Blender Collade Support",
-    "version": (1, 0, 4),
+    "version": (1, 0, 5),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -170,11 +170,19 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
     transformation: EnumProperty(
         name="Transformations",
         items=(
-            ("MUL", "Multiply", "Apply node transforms as object matrices"),
-            ("PARENT", "Parenting", "Recreate the COLLADA node hierarchy"),
+            (
+                "PARENT",
+                "Parenting",
+                "Recreate COLLADA/SketchUp groups as parented Empties (matches Blender 4.5)",
+            ),
+            (
+                "MUL",
+                "Multiply",
+                "Flatten hierarchy: apply node transforms as world matrices",
+            ),
             ("APPLY", "Apply", "Bake transforms into mesh data"),
         ),
-        default="MUL",
+        default="PARENT",
     )
 
     def execute(self, context):

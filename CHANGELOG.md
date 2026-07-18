@@ -2,6 +2,12 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.0.5] — 2026-07-18
+
+- Default import **Transformations** mode is now **Parenting** (matches Blender 4.5 group trees)
+- Parenting uses COLLADA/SketchUp `name` attributes for Empties (`SketchUp`, `group_0`, …) instead of only XML ids
+- Local matrices applied after parenting to preserve hierarchy transforms
+
 ## [1.0.4] — 2026-07-18
 
 - Point `website` / `doc_url` at https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X

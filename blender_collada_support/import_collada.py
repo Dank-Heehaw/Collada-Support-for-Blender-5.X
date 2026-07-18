@@ -179,6 +179,26 @@ def unurlid(uid) :
     return uid[1:]
 #end unurlid
 
+def collada_label(obj) :
+    "Human-readable COLLADA label: prefer XML name (SketchUp groups), then id."
+    xml = getattr(obj, "xmlnode", None)
+    if xml is not None :
+        label = xml.get("name")
+        if label :
+            return label
+        #end if
+    #end if
+    label = getattr(obj, "name", None)
+    if label :
+        return label
+    #end if
+    label = getattr(obj, "id", None)
+    if label :
+        return label
+    #end if
+    return None
+#end collada_label
+
 def find_main_shader(in_datablock, type_name) :
     node_graph = in_datablock.node_tree
     shader = list(n for n in node_graph.nodes if n.type == type_name)[0]
@@ -306,7 +326,11 @@ class ColladaImport :
         #end truncate_bytes
 
     #begin name
-        if hasattr(obj, "id") and obj.id != None :
+        # Prefer COLLADA name for Empties/groups (SketchUp), otherwise id.
+        label = collada_label(obj)
+        if prefix_name == DATABLOCK.EMPTY and label :
+            origname = label
+        elif hasattr(obj, "id") and obj.id != None :
             origname = obj.id
             if self._id_prefixes != None :
                 prefix = self._id_prefixes.get(prefix_name)
@@ -314,10 +338,18 @@ class ColladaImport :
                     origname = origname[len(prefix):]
                 #end if
             #end if
-            if origname in self._name_map :
-                usename = self._name_map[origname]
+        elif label :
+            origname = label
+        else :
+            origname = None
+        #end if
+        if origname != None :
+            # Key by type+id when available so duplicate group names stay distinct.
+            map_key = (prefix_name, getattr(obj, "id", None) or origname)
+            if map_key in self._name_map :
+                usename = self._name_map[map_key]
             else :
-                usename = truncate_bytes(origname, MAX_NAME_LENGTH)
+                usename = truncate_bytes(str(origname), MAX_NAME_LENGTH)
                 seq = 0
                 while usename in self._name_revmap :
                     seq += 1
@@ -325,10 +357,10 @@ class ColladaImport :
                     suffix_len = len(suffix.encode())
                     assert suffix_len < MAX_NAME_LENGTH
                     usename = \
-                        "%s%s" % (truncate_bytes(origname, MAX_NAME_LENGTH - suffix_len), suffix)
+                        "%s%s" % (truncate_bytes(str(origname), MAX_NAME_LENGTH - suffix_len), suffix)
                 #end while
-                self._name_map[origname] = usename
-                self._name_revmap[usename] = origname
+                self._name_map[map_key] = usename
+                self._name_revmap[usename] = map_key
             #end if
         else :
             origname = id(obj) # non-string type to avoid conflicting with any actual XML ID
@@ -1226,17 +1258,31 @@ class ColladaImport :
         return matctx.name
     #end material
 
+    def _attach_with_local_matrix(self, b_obj, parent, local_mat) :
+        "Parent first, then set local matrix (Blender 4.5-style hierarchy)."
+        # local_mat must already be in Blender units.
+        if b_obj.name not in self._collection.objects :
+            self._collection.objects.link(b_obj)
+        #end if
+        if parent != None :
+            b_obj.parent = parent
+            b_obj.matrix_local = local_mat
+        else :
+            b_obj.matrix_world = self._orient @ local_mat
+        #end if
+        return b_obj
+    #end _attach_with_local_matrix
+
     def parent_node(self, node, parent, node_matrix = None) :
         if isinstance(node, (Node, NodeNode)) :
-            b_obj = bpy.data.objects.new(self.name(DATABLOCK.EMPTY, node), None)
-            b_obj.matrix_world = self._convert_units_matrix(Matrix(node.matrix))
+            # SketchUp groups are <node name="group_N"> — keep that outliner name.
+            src = node.node if isinstance(node, NodeNode) else node
+            b_obj = bpy.data.objects.new(self.name(DATABLOCK.EMPTY, src), None)
+            local = self._convert_units_matrix(Matrix(src.matrix))
             if node_matrix != None :
-                b_obj.matrix_world = node_matrix @ b_obj.matrix_world
+                local = node_matrix @ local
             #end if
-            self._collection.objects.link(b_obj)
-            if parent != None :
-                b_obj.parent = parent
-            #end if
+            self._attach_with_local_matrix(b_obj, parent, local)
             parent = b_obj
         else :
             handle_type = tuple(h for h in self.obj_type_handlers if isinstance(node, h[2]))
@@ -1249,10 +1295,14 @@ class ColladaImport :
                 bobj = bobj[0]
                 b_obj = handle_type[1](self, bobj)
                 if b_obj != None :
-                    if node_matrix != None :
-                        b_obj.matrix_world = node_matrix @ b_obj.matrix_world
+                    local = Matrix.Identity(4)
+                    if hasattr(bobj, "matrix") and bobj.matrix is not None :
+                        local = self._convert_units_matrix(Matrix(bobj.matrix))
                     #end if
-                    b_obj.parent = parent
+                    if node_matrix != None :
+                        local = node_matrix @ local
+                    #end if
+                    self._attach_with_local_matrix(b_obj, parent, local)
                     parent = b_obj
                 #end if
             #end if

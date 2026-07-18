@@ -63,11 +63,11 @@ In the import file browser, **Transformations**:
 
 | Mode | Behavior |
 | --- | --- |
-| **Multiply** (default) | Applies node transforms as object world matrices (flatter Outliner) |
-| **Parenting** | Recreates COLLADA node hierarchy with empties / parenting (closer to Blender 4.5 group trees) |
+| **Parenting** (default) | Recreates COLLADA/SketchUp **groups** as parented Empties (closer to Blender 4.5) |
+| **Multiply** | Flattens hierarchy: applies node transforms as world matrices (long mesh list) |
 | **Apply** | Bakes transforms into mesh data |
 
-For SketchUp / Warehouse scenes where hierarchy matters, try **Parenting**.
+If you still see a flat list of `ID*` meshes, make sure **Transformations → Parenting** is selected (default from **1.0.5**).
 
 ## Bundled pycollada
 
@@ -87,7 +87,7 @@ If import/export reports that pycollada failed to load:
 - Very large files remain CPU-bound during XML parse (pycollada)
 - Nested ZAE sub-archives are not supported
 - Not full feature parity with the old OpenCOLLADA importer/exporter
-- Hierarchy under **Multiply** will look flatter than Blender 4.5 LTS; use **Parenting** when needed
+- Hierarchy under **Multiply** is intentionally flat; use **Parenting** (default) for SketchUp-style groups
 
 ## Troubleshooting
 
