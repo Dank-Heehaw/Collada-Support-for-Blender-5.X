@@ -21,9 +21,9 @@
 # Plus lessons from ekztal's Blender 5 DAE importer.
 
 bl_info = {
-    "name": "Blender Collada Support",
-    "author": "Tim Knip, Dusan Maliarik, Lawrence D'Oliveiro, Kims Ferdy, Blender Collade Support",
-    "version": (1, 1, 0),
+    "name": "Collada Support",
+    "author": "Waheed Khan, Collada Support for Blender 5.X",
+    "version": (1, 1, 2),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -33,9 +33,6 @@ bl_info = {
 
 import importlib
 import os
-import site
-import subprocess
-import sys
 
 import bpy
 from bpy.props import (
@@ -49,25 +46,6 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 # Detect add-on reload (Blender keeps module dicts around).
 _ADDON_RELOAD = "HAS_COLLADA" in globals()
 
-
-def _modules_path():
-    paths = bpy.utils.script_paths(subdir="modules")
-    if paths:
-        return paths[0]
-    return os.path.join(bpy.utils.resource_path("USER"), "scripts", "modules")
-
-
-def _ensure_modules_path():
-    path = _modules_path()
-    os.makedirs(path, exist_ok=True)
-    if path not in sys.path:
-        # Keep Blender Extension wheel paths ahead of this legacy fallback.
-        sys.path.append(path)
-    site.addsitedir(path)
-    return path
-
-
-_ensure_modules_path()
 
 def _refresh_collada_status():
     global HAS_COLLADA
@@ -89,60 +67,6 @@ if _ADDON_RELOAD and HAS_COLLADA:
 
     importlib.reload(import_collada)
     importlib.reload(export_collada)
-
-
-class COLLADA_OT_install_pycollada(bpy.types.Operator):
-    """Update or reinstall pycollada in Blender's user modules folder"""
-
-    bl_idname = "collada_support.install_pycollada"
-    bl_label = "Update / Reinstall pycollada"
-    bl_options = {"REGISTER"}
-
-    def execute(self, context):
-        modules_path = _ensure_modules_path()
-        cmd = [
-            sys.executable,
-            "-m",
-            "pip",
-            "install",
-            "--upgrade",
-            "--target",
-            modules_path,
-            "pycollada",
-        ]
-        try:
-            completed = subprocess.run(
-                cmd,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-        except OSError as exc:
-            self.report({"ERROR"}, f"Failed to run pip: {exc}")
-            return {"CANCELLED"}
-
-        if completed.returncode != 0:
-            detail = (completed.stderr or completed.stdout or "").strip()
-            self.report(
-                {"ERROR"},
-                f"pip install failed ({completed.returncode}). {detail[-400:]}",
-            )
-            return {"CANCELLED"}
-
-        # Drop cached failed imports so the next check can succeed.
-        for key in list(sys.modules):
-            if key == "collada" or key.startswith("collada."):
-                del sys.modules[key]
-
-        if not _refresh_collada_status():
-            self.report(
-                {"ERROR"},
-                "pycollada installed but still not importable. Restart Blender.",
-            )
-            return {"CANCELLED"}
-
-        self.report({"INFO"}, f"pycollada updated/reinstalled in {modules_path}")
-        return {"FINISHED"}
 
 
 class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
@@ -189,8 +113,8 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
         if not _refresh_collada_status():
             self.report(
                 {"ERROR"},
-                "Bundled pycollada failed to load. Open Preferences > Add-ons > "
-                "Blender Collada Support and use Update / Reinstall pycollada.",
+                "Bundled pycollada failed to load. Reinstall the extension zip "
+                "from Releases (wheels must be present).",
             )
             return {"CANCELLED"}
 
@@ -270,8 +194,8 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         if not _refresh_collada_status():
             self.report(
                 {"ERROR"},
-                "Bundled pycollada failed to load. Open Preferences > Add-ons > "
-                "Blender Collada Support and use Update / Reinstall pycollada.",
+                "Bundled pycollada failed to load. Reinstall the extension zip "
+                "from Releases (wheels must be present).",
             )
             return {"CANCELLED"}
 
@@ -293,37 +217,20 @@ class ColladaSupportPreferences(bpy.types.AddonPreferences):
 
     def draw(self, context):
         layout = self.layout
-        modules_path = _ensure_modules_path()
-
-        box = layout.box()
-        box.label(text="Python modules path", icon="FILE_FOLDER")
-        box.label(text=modules_path)
-
         if not HAS_COLLADA:
             layout.label(text="Bundled pycollada failed to load.", icon="ERROR")
-            layout.operator(
-                COLLADA_OT_install_pycollada.bl_idname,
-                text="Update / Reinstall pycollada",
-                icon="FILE_REFRESH",
-            )
             tip = layout.box()
-            tip.label(text="This optional network fallback replaces the bundled copy.")
-            tip.label(text="Restart Blender after updating or reinstalling.")
+            tip.label(text="Reinstall blender_collada_support.zip from Releases.")
+            tip.label(text="Dependencies ship only as bundled wheels.")
         else:
             import collada
 
             version = getattr(collada, "__version__", "unknown")
             layout.label(text=f"pycollada ready (version {version})", icon="CHECKMARK")
-            layout.label(text="Bundled wheels are active; network update is optional.")
-            layout.operator(
-                COLLADA_OT_install_pycollada.bl_idname,
-                text="Update / Reinstall pycollada",
-                icon="FILE_REFRESH",
-            )
+            layout.label(text="Bundled wheels are loaded by the extension.")
 
 
 classes = (
-    COLLADA_OT_install_pycollada,
     IMPORT_OT_collada,
     EXPORT_OT_collada,
     ColladaSupportPreferences,
@@ -349,7 +256,6 @@ def menu_func_export(self, context):
 
 
 def register():
-    _ensure_modules_path()
     _refresh_collada_status()
     for cls in classes:
         bpy.utils.register_class(cls)

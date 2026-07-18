@@ -25,10 +25,8 @@ Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada
 2. In Blender 5: **Edit → Preferences → Add-ons → Install from Disk…**  
    (wording may be **Install…** depending on build).
 3. Select the downloaded **`blender_collada_support.zip`**. **Do not extract it first.**
-4. Enable **Blender Collada Support**.
-5. **pycollada is bundled** as wheels inside the zip — no separate pip install for normal use.
-
-Optional fallback in add-on Preferences: **Update / Reinstall pycollada** (network) if bundled wheels fail to load or need refreshing.
+4. Enable **Collada Support**.
+5. **pycollada is bundled** as wheels inside the zip — no pip install or network setup.
 
 ### Menus
 
@@ -76,8 +74,8 @@ The extension ships unmodified PyPI wheels (`pycollada`, `python-dateutil`, `six
 If import/export reports that pycollada failed to load:
 
 1. Confirm you installed the **release** zip, not the source archive.
-2. Open **Preferences → Add-ons → Blender Collada Support**.
-3. Use **Update / Reinstall pycollada**.
+2. Confirm `wheels/` is inside the zip (`pycollada`, `python-dateutil`, `six`).
+3. Remove the extension and reinstall **`blender_collada_support.zip`** from Releases.
 4. Restart Blender if needed.
 
 ## Known limitations
@@ -105,7 +103,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (see Preferences; currently **1.1.0**)
+- Add-on version (see Preferences; currently **1.1.2**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output
@@ -115,7 +113,7 @@ Please include:
 ## Repository layout
 
 ```
-blender_collada_support/   # installable extension (manifest, I/O, wheels/)
+collada_support/           # installable extension (manifest, I/O, wheels/)
 dist/                      # rebuilt blender_collada_support.zip (local; not in git)
 submission/                # Blender Extensions Platform listing materials
 CONTRIBUTING.md            # developer workflow

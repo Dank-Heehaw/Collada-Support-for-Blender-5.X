@@ -13,12 +13,12 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 
 | Path | Purpose |
 | --- | --- |
-| `blender_collada_support/` | Installable extension package |
-| `blender_collada_support/blender_manifest.toml` | Extension metadata + `wheels` list |
-| `blender_collada_support/__init__.py` | Operators, menus, preferences |
-| `blender_collada_support/import_collada.py` | Import |
-| `blender_collada_support/export_collada.py` | Export |
-| `blender_collada_support/wheels/` | Unmodified PyPI `.whl` files |
+| `collada_support/` | Installable extension package |
+| `collada_support/blender_manifest.toml` | Extension metadata + `wheels` list |
+| `collada_support/__init__.py` | Operators, menus, preferences |
+| `collada_support/import_collada.py` | Import |
+| `collada_support/export_collada.py` | Export |
+| `collada_support/wheels/` | Unmodified PyPI `.whl` files |
 | `dist/` | Local build of the install zip (gitignored) |
 | `submission/` | Extensions Platform listing assets |
 
@@ -33,13 +33,13 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 
 ### Option B — Symlink / copy the package folder
 
-Copy or junction `blender_collada_support` into Blender’s extensions/add-ons path for your version, then enable it in Preferences.
+Copy or junction `collada_support` into Blender’s extensions/add-ons path for your version, then enable it in Preferences.
 
 After code changes: **disable → enable** the add-on, or restart Blender. Prefer restarting after wheel or manifest changes.
 
 ## Build the distributable zip
 
-The archive **root must be the folder** `blender_collada_support/` (so Blender sees `blender_collada_support/blender_manifest.toml` inside the zip).
+The archive **root must be the folder** `collada_support/` (so Blender sees `collada_support/blender_manifest.toml` inside the zip).
 
 PowerShell example from the repo root:
 
@@ -48,14 +48,14 @@ New-Item -ItemType Directory -Path .\dist -Force | Out-Null
 if (Test-Path .\dist\blender_collada_support.zip) {
   Remove-Item .\dist\blender_collada_support.zip -Force
 }
-Compress-Archive -Path .\blender_collada_support -DestinationPath .\dist\blender_collada_support.zip
+Compress-Archive -Path .\collada_support -DestinationPath .\dist\blender_collada_support.zip
 ```
 
 Verify entries look like:
 
-- `blender_collada_support/__init__.py`
-- `blender_collada_support/blender_manifest.toml`
-- `blender_collada_support/wheels/...`
+- `collada_support/__init__.py`
+- `collada_support/blender_manifest.toml`
+- `collada_support/wheels/...`
 
 **Wrong:** zipping the whole repo, or zipping so `__init__.py` sits at the zip root without the package folder.
 
