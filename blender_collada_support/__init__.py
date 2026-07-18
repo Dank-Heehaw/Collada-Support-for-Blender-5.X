@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Blender Collada Support",
     "author": "Tim Knip, Dusan Maliarik, Lawrence D'Oliveiro, Kims Ferdy, Blender Collade Support",
-    "version": (1, 0, 2),
+    "version": (1, 0, 3),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",

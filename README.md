@@ -60,4 +60,4 @@ dist/                        # distributable zip
 
 ## License
 
-GPL-2.0-or-later (same family as the upstream Blender / pycollada add-ons).
+GPL-3.0-or-later (same family as the upstream Blender / pycollada add-ons).
