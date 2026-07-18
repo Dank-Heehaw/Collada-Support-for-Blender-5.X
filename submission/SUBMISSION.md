@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `1.1.2` |
+| Version | `1.1.3` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.1.2.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.1.3.md`
 
 ---
 
@@ -151,18 +151,17 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (1.1.2)
+## Quick paste — Release notes (1.1.3)
 
 ```markdown
-# Collada Support 1.1.2
+# Collada Support 1.1.3
 
 ## Changes
 
-- Extension package id / folder renamed to **`collada_support`** (Extensions Platform resubmit)
-- Extension **title** is **Collada Support** (no “Blender” in the display name)
-- Dependencies ship **only** as bundled wheels — no pip install, no `sys.path` / site-packages hacks, no network permission
-- Includes **1.1.0** static correctness fixes: multi-material export, empty material slots, selection-only export, atomic DAE/ZAE write, ortho camera scale, scene unit export, parse-warning reports
-- Default import **Transformations** mode remains **Parenting** (SketchUp-style groups)
+- Removed the add-on preferences status panel
+- Removed failed-load text from the File → Import and Export menu labels
+- Import/export attempts now report the underlying pycollada import error
+- Package id and folder remain **`collada_support`**
 
 Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
@@ -175,7 +174,8 @@ Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → D
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_1.1.2.md     ← form: Version release notes
+  RELEASE_NOTES_1.1.3.md     ← form: Version release notes
+  RELEASE_NOTES_1.1.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.0.4.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.0.3.md     ← earlier notes (kept for reference)
   icon.png                   ← 256×256

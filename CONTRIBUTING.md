@@ -15,7 +15,7 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 | --- | --- |
 | `collada_support/` | Installable extension package |
 | `collada_support/blender_manifest.toml` | Extension metadata + `wheels` list |
-| `collada_support/__init__.py` | Operators, menus, preferences |
+| `collada_support/__init__.py` | Operators and menus |
 | `collada_support/import_collada.py` | Import |
 | `collada_support/export_collada.py` | Export |
 | `collada_support/wheels/` | Unmodified PyPI `.whl` files |

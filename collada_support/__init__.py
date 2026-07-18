@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (1, 1, 2),
+    "version": (1, 1, 3),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -47,18 +47,25 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 _ADDON_RELOAD = "HAS_COLLADA" in globals()
 
 
-def _refresh_collada_status():
-    global HAS_COLLADA
+def _collada_import_error():
+    """Return ImportError from loading pycollada, or None on success."""
     try:
         import collada  # noqa: F401
 
-        HAS_COLLADA = True
-    except ImportError:
-        HAS_COLLADA = False
+        return None
+    except ImportError as exc:
+        return exc
+
+
+def _refresh_collada_status():
+    global HAS_COLLADA, COLLADA_IMPORT_ERROR
+    COLLADA_IMPORT_ERROR = _collada_import_error()
+    HAS_COLLADA = COLLADA_IMPORT_ERROR is None
     return HAS_COLLADA
 
 
 HAS_COLLADA = False
+COLLADA_IMPORT_ERROR = None
 _refresh_collada_status()
 
 # Reload I/O modules only when pycollada is available (they import it at top level).
@@ -111,11 +118,8 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
 
     def execute(self, context):
         if not _refresh_collada_status():
-            self.report(
-                {"ERROR"},
-                "Bundled pycollada failed to load. Reinstall the extension zip "
-                "from Releases (wheels must be present).",
-            )
+            detail = COLLADA_IMPORT_ERROR or "unknown import error"
+            self.report({"ERROR"}, f"pycollada is not available: {detail}")
             return {"CANCELLED"}
 
         from . import import_collada
@@ -192,11 +196,8 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
 
     def execute(self, context):
         if not _refresh_collada_status():
-            self.report(
-                {"ERROR"},
-                "Bundled pycollada failed to load. Reinstall the extension zip "
-                "from Releases (wheels must be present).",
-            )
+            detail = COLLADA_IMPORT_ERROR or "unknown import error"
+            self.report({"ERROR"}, f"pycollada is not available: {detail}")
             return {"CANCELLED"}
 
         from . import export_collada
@@ -212,47 +213,24 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
             return {"CANCELLED"}
 
 
-class ColladaSupportPreferences(bpy.types.AddonPreferences):
-    bl_idname = __name__
-
-    def draw(self, context):
-        layout = self.layout
-        if not HAS_COLLADA:
-            layout.label(text="Bundled pycollada failed to load.", icon="ERROR")
-            tip = layout.box()
-            tip.label(text="Reinstall blender_collada_support.zip from Releases.")
-            tip.label(text="Dependencies ship only as bundled wheels.")
-        else:
-            import collada
-
-            version = getattr(collada, "__version__", "unknown")
-            layout.label(text=f"pycollada ready (version {version})", icon="CHECKMARK")
-            layout.label(text="Bundled wheels are loaded by the extension.")
-
-
 classes = (
     IMPORT_OT_collada,
     EXPORT_OT_collada,
-    ColladaSupportPreferences,
 )
 
 
 def menu_func_import(self, context):
-    label = (
-        "COLLADA (.dae, .zae, .kmz, .zip)"
-        if HAS_COLLADA
-        else "COLLADA (.dae) [bundled pycollada failed]"
+    self.layout.operator(
+        IMPORT_OT_collada.bl_idname,
+        text="COLLADA (.dae, .zae, .kmz, .zip)",
     )
-    self.layout.operator(IMPORT_OT_collada.bl_idname, text=label)
 
 
 def menu_func_export(self, context):
-    label = (
-        "COLLADA (.dae, .zae)"
-        if HAS_COLLADA
-        else "COLLADA (.dae) [bundled pycollada failed]"
+    self.layout.operator(
+        EXPORT_OT_collada.bl_idname,
+        text="COLLADA (.dae, .zae)",
     )
-    self.layout.operator(EXPORT_OT_collada.bl_idname, text=label)
 
 
 def register():

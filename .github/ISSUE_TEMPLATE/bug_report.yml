@@ -19,8 +19,8 @@ body:
     id: addon_version
     attributes:
       label: Add-on version
-      description: Shown in Preferences → Add-ons (e.g. 1.1.2).
-      placeholder: "1.1.2"
+      description: Shown in Preferences → Add-ons (e.g. 1.1.3).
+      placeholder: "1.1.3"
     validations:
       required: true
   - type: dropdown
