@@ -109,9 +109,9 @@ Use this add-on when you need to open or save `.dae` files (and related archives
 
 1. Download the extension package (or `blender_collada_support.zip`).
 2. In Blender 5: **Edit → Preferences → Get Extensions / Add-ons → Install from Disk…** and select the zip.
-3. Enable **Blender Collada Support**.
-4. `pycollada` is **bundled as wheels** — no separate pip install is required for normal use.
-5. Preferences offer **Update / Reinstall pycollada** as an optional network fallback if the bundled wheels fail to load or need updating.
+3. Enable **Collada Support**.
+4. `pycollada` is **bundled as wheels** — dependencies are not installed via pip.
+5. If wheels fail to load, reinstall the release zip (do not use pip).
 
 Menus after install:
 

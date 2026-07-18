@@ -2,6 +2,14 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.1.1] — 2026-07-18
+
+Blender Extensions Platform compliance.
+
+- Extension **title** no longer includes the word “Blender” (`name = "Collada Support"`)
+- Remove pip install / update operator and all `sys.path` / `site.addsitedir` module-path manipulation
+- Dependencies ship **only** as bundled wheels; drop unused `network` permission
+
 ## [1.1.0] — 2026-07-18
 
 Static correctness fixes toward Blender 4.5 parity (see [ROADMAP.md](ROADMAP.md)).
@@ -54,6 +62,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[1.1.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.1
 [1.1.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.0
 [1.0.5]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/commits/master
 [1.0.4]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.0.4
