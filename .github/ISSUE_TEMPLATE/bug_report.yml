@@ -19,8 +19,8 @@ body:
     id: addon_version
     attributes:
       label: Add-on version
-      description: Shown in Preferences → Add-ons (e.g. 1.0.4).
-      placeholder: "1.0.4"
+      description: Shown in Preferences → Add-ons (e.g. 1.1.2).
+      placeholder: "1.1.2"
     validations:
       required: true
   - type: dropdown
@@ -42,8 +42,8 @@ body:
     attributes:
       label: Import Transformations mode (if importing)
       options:
-        - "Multiply (default)"
-        - "Parenting"
+        - "Parenting (default)"
+        - "Multiply"
         - "Apply"
         - "N/A (export only)"
         - "Not sure"

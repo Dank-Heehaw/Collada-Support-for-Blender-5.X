@@ -6,7 +6,7 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 
 | Version | Focus |
 | --- | --- |
-| **1.1.0** (current) | Static correctness — multi-material export indices, empty material slots, selection semantics, atomic DAE/ZAE write, ortho camera scale, better parse-error reports, scene unit export |
+| **1.1.0–1.1.2** (current) | Static correctness (1.1.0) + Extensions compliance / package id `collada_support` (1.1.1–1.1.2) |
 | **1.2.0** | Static scene parity — custom/split normals, vertex colors, modifiers / evaluated-mesh options, UV bindings, units/axis options, native Blender profile extras |
 | **1.3.0** | Morph / shape-key **import** (then export) |
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |

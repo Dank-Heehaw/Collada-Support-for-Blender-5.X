@@ -5,8 +5,8 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `1.0.4` |
-| Display name | Collada Support for Blender 5.X |
+| Version | `1.1.2` |
+| Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
 ---
@@ -33,21 +33,13 @@ Repo home (also set as `website` / `doc_url` in the package):
 https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 ```
 
-If the remote is not pushed yet, create and push with:
-
-```powershell
-cd F:\Projects\Addons\Blender-Collade-Support
-gh auth login
-gh repo create Collada-Support-for-Blender-5.X --public --description "Collada Support for Blender 5.X" --source=. --remote=origin --push
-```
-
 ---
 
-## 3. Initial version release notes (Markdown)
+## 3. Version release notes (Markdown)
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.0.4.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.1.2.md`
 
 ---
 
@@ -90,9 +82,12 @@ You can add a second preview later (e.g. Export menu / sample scene) if the form
 ## Quick paste — Description
 
 ```markdown
-# Collada Support for Blender 5.X
+# Collada Support
 
 Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
+
+**Homepage:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
+**Support / issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
 
 Use this add-on when you need to open or save `.dae` files (and related archives) in Blender 5.0 and newer.
 
@@ -102,6 +97,7 @@ Use this add-on when you need to open or save `.dae` files (and related archives
 - **Export** meshes, Principled BSDF materials, parenting, optional textures, and ZAE packages
 - **Archive formats**: `.zae` (official COLLADA zip), `.kmz` (Earth/Warehouse-style), and generic `.zip` containing a `.dae`
 - **COLLADA versions** on export: 1.4.1 or 1.5.0
+- Import **Parenting** mode recreates SketchUp-style groups as Empties (default)
 - SketchUp and common transform quirks handled where practical
 - Import hardening inspired by Blender 4.5’s native importer patterns (safer mesh validation, fewer crashes on bad data)
 
@@ -134,7 +130,8 @@ This extension ships **pycollada** (and its small dependencies) as wheels inside
 ## Limitations
 
 - No skin / armature / animation import or export yet (not full OpenCOLLADA parity)
-- No custom split-normals parity with Blender’s former `use_custom_normals` option
+- No morph / shape-key I/O yet
+- No custom split-normals / vertex-color parity with the old native importer
 - Very large scenes remain CPU-bound during XML parse
 - Nested ZAE sub-archives are not supported
 
@@ -154,17 +151,20 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (1.0.4)
+## Quick paste — Release notes (1.1.2)
 
 ```markdown
-# Collada Support 1.0.4
+# Collada Support 1.1.2
 
 ## Changes
 
-- Website / docs now point at this project’s GitHub repo: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
-- Preferences no longer present **Install pycollada** as a first-time install step (wheels are bundled)
-- Optional network fallback is labeled **Update / Reinstall pycollada**
-- Clearer import/export errors when bundled pycollada fails to load (direct users to Preferences → Update / Reinstall)
+- Extension package id / folder renamed to **`collada_support`** (Extensions Platform resubmit)
+- Extension **title** is **Collada Support** (no “Blender” in the display name)
+- Dependencies ship **only** as bundled wheels — no pip install, no `sys.path` / site-packages hacks, no network permission
+- Includes **1.1.0** static correctness fixes: multi-material export, empty material slots, selection-only export, atomic DAE/ZAE write, ortho camera scale, scene unit export, parse-warning reports
+- Default import **Transformations** mode remains **Parenting** (SketchUp-style groups)
+
+Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
 
 ---
@@ -175,7 +175,8 @@ Built on the pycollada Blender lineage:
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_1.0.4.md     ← form: Initial version release notes
+  RELEASE_NOTES_1.1.2.md     ← form: Version release notes
+  RELEASE_NOTES_1.0.4.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.0.3.md     ← earlier notes (kept for reference)
   icon.png                   ← 256×256
   featured.png               ← 1920×1080

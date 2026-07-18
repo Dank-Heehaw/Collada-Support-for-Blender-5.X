@@ -1,4 +1,4 @@
-# Collada Support for Blender 5.X
+# Collada Support
 
 Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
 
@@ -13,6 +13,7 @@ Use this add-on when you need to open or save `.dae` files (and related archives
 - **Export** meshes, Principled BSDF materials, parenting, optional textures, and ZAE packages
 - **Archive formats**: `.zae` (official COLLADA zip), `.kmz` (Earth/Warehouse-style), and generic `.zip` containing a `.dae`
 - **COLLADA versions** on export: 1.4.1 or 1.5.0
+- Import **Parenting** mode recreates SketchUp-style groups as Empties (default)
 - SketchUp and common transform quirks handled where practical
 - Import hardening inspired by Blender 4.5’s native importer patterns (safer mesh validation, fewer crashes on bad data)
 
@@ -45,7 +46,8 @@ This extension ships **pycollada** (and its small dependencies) as wheels inside
 ## Limitations
 
 - No skin / armature / animation import or export yet (not full OpenCOLLADA parity)
-- No custom split-normals parity with Blender’s former `use_custom_normals` option
+- No morph / shape-key I/O yet
+- No custom split-normals / vertex-color parity with the old native importer
 - Very large scenes remain CPU-bound during XML parse
 - Nested ZAE sub-archives are not supported
 
