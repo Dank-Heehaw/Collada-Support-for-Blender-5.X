@@ -6,5 +6,6 @@ __pycache__/
 *.blend1
 dist/
 reference/
+.gh-auth-log.txt
 .DS_Store
 Thumbs.db

@@ -1,74 +1,127 @@
 # Collada Support for Blender 5.X
 
-Restores **COLLADA (`.dae` / `.zae`) import and export** for Blender 5 after native OpenCOLLADA support was removed.
+Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
 
 **Project:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
-**Issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
+**Issues / support:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues  
+**License:** [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)
 
-Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada_importexport) → [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport)), with crash/perf hardening guided by Blender **4.5’s native** `MeshImporter` / `DocumentImporter` (batch mesh writes, topology validation, no `bpy.ops` during import).
+Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada_importexport) → [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport)), with import hardening guided by Blender **4.5’s** native COLLADA importer patterns.
 
-## Download
+## Download (what to install)
 
-**Blender users should download [`blender_collada_support.zip`](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/latest/download/blender_collada_support.zip) from the latest release.**
+**Blender users must download this file only:**
 
-Do **not** use GitHub's green **Code → Download ZIP** button. That downloads the source repository, not the installable Blender extension.
+**[`blender_collada_support.zip`](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/latest/download/blender_collada_support.zip)**
 
-## Install
+| Do download | Do **not** download |
+| --- | --- |
+| Release asset **`blender_collada_support.zip`** | GitHub green **Code → Download ZIP** (source tree, not installable) |
+| From [Releases](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases) | Cloning the repo unless you are developing |
 
-1. Download the release asset named **`blender_collada_support.zip`** using the link above.
-2. In Blender 5, open **Edit → Preferences → Add-ons → Install from Disk…**.
-3. Select the downloaded **`blender_collada_support.zip`** file. Do not extract it first.
+## Install (Blender 5.x)
+
+1. Download **`blender_collada_support.zip`** from the release link above.
+2. In Blender 5: **Edit → Preferences → Add-ons → Install from Disk…**  
+   (wording may be **Install…** depending on build).
+3. Select the downloaded **`blender_collada_support.zip`**. **Do not extract it first.**
 4. Enable **Blender Collada Support**.
-5. `pycollada` is bundled — no separate dependency install is needed.
+5. **pycollada is bundled** as wheels inside the zip — no separate pip install for normal use.
 
-Preferences offer **Update / Reinstall pycollada** as an optional network fallback if the bundled wheels fail to load or need updating.
+Optional fallback in add-on Preferences: **Update / Reinstall pycollada** (network) if bundled wheels fail to load or need refreshing.
 
-Menus:
+### Menus
 
 - **File → Import → COLLADA (.dae, .zae, .kmz, .zip)**
 - **File → Export → COLLADA (.dae, .zae)**
 
-## Archive import (ZAE / KMZ / ZIP)
+## Supported formats
 
-| Format | Behavior |
-|---|---|
+### Import
+
+| Format | Notes |
+| --- | --- |
+| **`.dae`** | Standard COLLADA document |
 | **`.zae`** | Official COLLADA zip (`manifest.xml` or auto-picked `.dae`) |
-| **`.kmz`** | Earth/Warehouse-style zip with embedded `.dae` + textures |
-| **`.zip`** | Any zip containing a `.dae` |
+| **`.kmz`** | Earth / Warehouse-style zip with embedded `.dae` + textures |
+| **`.zip`** | Any zip that contains at least one `.dae` |
 
-## Import hardening (v1.0.2)
+Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, and SketchUp-oriented quirks where possible.
 
-Aligned with Blender 4.5 native importer patterns:
+### Export
 
-- No `bpy.ops` / Edit Mode / active-object thrashing during import
-- Invalid faces rejected before `from_pydata` (out-of-range, degenerate, &lt;3 verts)
-- `mesh.validate()` after mesh creation
-- Batch `foreach_set` for smooth flags, material indices, and UVs
-- Per-object error isolation so one bad mesh does not abort the whole file
-- Faster face-index paths (avoid per-triangle Python objects when possible)
+| Format | Notes |
+| --- | --- |
+| **`.dae`** | COLLADA **1.4.1** or **1.5.0** |
+| **`.zae`** | Zip package; can include textures |
 
-## What works today
+Export covers meshes, Principled BSDF materials (Blender 5 socket names), object parenting, optional textures, and ZAE packaging.
 
-**Import:** triangle/polylist meshes, UVs, basic materials, textures, cameras/lights, SketchUp quirks, transform modes, archives.
+### Import transform modes
 
-**Export:** meshes, Principled materials, parenting, optional textures/ZAE, COLLADA 1.4.1 or 1.5.0.
+In the import file browser, **Transformations**:
 
-## Remaining limitations
+| Mode | Behavior |
+| --- | --- |
+| **Multiply** (default) | Applies node transforms as object world matrices (flatter Outliner) |
+| **Parenting** | Recreates COLLADA node hierarchy with empties / parenting (closer to Blender 4.5 group trees) |
+| **Apply** | Bakes transforms into mesh data |
 
-- No skin / armature / animation (ekztal-style rig import not ported yet)
-- No custom split normals parity with native `use_custom_normals`
-- Very large scenes still CPU-bound in pycollada XML parse
-- Nested ZAE sub-archives not supported
-- Not full feature parity with OpenCOLLADA
+For SketchUp / Warehouse scenes where hierarchy matters, try **Parenting**.
 
-## Development layout
+## Bundled pycollada
+
+The extension ships unmodified PyPI wheels (`pycollada`, `python-dateutil`, `six`) listed in `blender_manifest.toml`. Blender extracts them into the extension’s site-packages on install.
+
+If import/export reports that pycollada failed to load:
+
+1. Confirm you installed the **release** zip, not the source archive.
+2. Open **Preferences → Add-ons → Blender Collada Support**.
+3. Use **Update / Reinstall pycollada**.
+4. Restart Blender if needed.
+
+## Known limitations
+
+- No skin / armature / animation import or export yet
+- No full custom split-normals parity with Blender’s former native option
+- Very large files remain CPU-bound during XML parse (pycollada)
+- Nested ZAE sub-archives are not supported
+- Not full feature parity with the old OpenCOLLADA importer/exporter
+- Hierarchy under **Multiply** will look flatter than Blender 4.5 LTS; use **Parenting** when needed
+
+## Troubleshooting
+
+1. Open Blender’s **Window → Toggle System Console** (Windows) or start Blender from a terminal.
+2. Reproduce the import/export and copy the console text.
+3. Open an issue: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
+
+Please include:
+
+- Blender version (e.g. 5.0 / 5.2)
+- Add-on version (see Preferences; currently **1.0.4**)
+- Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
+- Import **Transformations** mode if relevant
+- Full console output
+- Expected vs actual result
+- A **small reproducible sample** file if you can share one (or a link)
+
+## Repository layout
 
 ```
-blender_collada_support/     # installable package (includes wheels/)
-dist/                        # distributable zip
-submission/                  # Blender Extensions listing materials
+blender_collada_support/   # installable extension (manifest, I/O, wheels/)
+dist/                      # rebuilt blender_collada_support.zip (local; not in git)
+submission/                # Blender Extensions Platform listing materials
+CONTRIBUTING.md            # developer workflow
+CHANGELOG.md               # release history
 ```
+
+## Credits
+
+- [blender_pycollada_importexport](https://github.com/ldo/blender_pycollada_importexport) — Tim Knip, Dusan Maliarik, Lawrence D’Oliveiro, and contributors  
+- [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport) — Kims Ferdy  
+- [pycollada](https://github.com/pycollada/pycollada)  
+- Blender 4.5 native COLLADA importer patterns (behavioral reference)
 
 ## License
 
-GPL-3.0-or-later (same family as the upstream Blender / pycollada add-ons).
+**GPL-3.0-or-later**

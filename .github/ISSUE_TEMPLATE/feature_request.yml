@@ -1,0 +1,28 @@
+name: Feature request
+description: Suggest an enhancement
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What workflow are you trying to support (e.g. SketchUp Warehouse, game pipeline)?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: markdown
+    attributes:
+      value: |
+        Note current limitations: no skin/armature/animation yet; hierarchy depends on import **Transformations** mode.

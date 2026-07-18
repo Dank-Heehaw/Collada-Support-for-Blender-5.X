@@ -1,0 +1,87 @@
+name: Bug report
+description: Report a problem with import or export
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a report. Please install from the release asset **`blender_collada_support.zip`**, not GitHub **Code → Download ZIP**.
+  - type: input
+    id: blender_version
+    attributes:
+      label: Blender version
+      description: Exact version from Help → About Blender (e.g. 5.0.0, 5.2.0).
+      placeholder: "5.2.0"
+    validations:
+      required: true
+  - type: input
+    id: addon_version
+    attributes:
+      label: Add-on version
+      description: Shown in Preferences → Add-ons (e.g. 1.0.4).
+      placeholder: "1.0.4"
+    validations:
+      required: true
+  - type: dropdown
+    id: input_format
+    attributes:
+      label: Input / output format
+      options:
+        - ".dae"
+        - ".zae"
+        - ".kmz"
+        - ".zip (contains .dae)"
+        - "Export .dae"
+        - "Export .zae"
+        - "Other / unknown"
+    validations:
+      required: true
+  - type: dropdown
+    id: transformation
+    attributes:
+      label: Import Transformations mode (if importing)
+      options:
+        - "Multiply (default)"
+        - "Parenting"
+        - "Apply"
+        - "N/A (export only)"
+        - "Not sure"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: console
+    attributes:
+      label: Blender console / System Console output
+      description: Window → Toggle System Console (Windows), or terminal output.
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: sample
+    attributes:
+      label: Reproducible sample
+      description: Link to a small .dae/.zae, or describe how to recreate. Avoid huge Warehouse dumps if a minimal file works.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I installed the release `blender_collada_support.zip` (not Code → Download ZIP).
+          required: false
+        - label: I can reproduce this after restarting Blender.
+          required: false
