@@ -4,6 +4,7 @@ import enum
 import re
 import io
 import time
+import tempfile
 import zipfile
 import numpy as np
 import bpy
@@ -115,44 +116,65 @@ class ColladaExport :
         self._dir = directory
         self._ext_files_map = {}
         self._ext_files_revmap = {}
-        if self._is_zae :
-            self._zip = zipfile.ZipFile(self._filepath, "w")
-            class ZipAttr :
-                compress_type = zipfile.ZIP_DEFLATED
-                file_attr = 0o100644 << 16
-                date_time = time.gmtime()[:6]
-                scene_name = "scene.dae"
-
-                @classmethod
-                def new_item(celf, filename) :
-                    item = zipfile.ZipInfo()
-                    item.compress_type = celf.compress_type
-                    item.external_attr = celf.file_attr
-                    item.date_time = celf.date_time
-                    item.filename = filename
-                    return item
-                #end new_item
-
-            #end ZipAttr
-            self._zipattr = ZipAttr
-            # First item in archive is uncompressed and named “mimetype”, and
-            # contents is MIME type for archive. This way it ends up at a fixed
-            # offset (filename at 30 bytes from start, contents at 38 bytes) for
-            # easy detection by format-sniffing tools. This convention is used
-            # by ODF and other formats similarly based on Zip archives.
-            mimetype = zipfile.ZipInfo()
-            mimetype.filename = "mimetype"
-            mimetype.compress_type = zipfile.ZIP_STORED
-            mimetype.external_attr = ZipAttr.file_attr
-            mimetype.date_time = (2020, 8, 23, 1, 33, 52)
-              # about when I started getting .zae export working
-            self._zip.writestr(mimetype, b"model/vnd.collada+xml+zip")
-              # extrapolating from the fact that the official type for .dae files
-              # is “model/vnd.collada+xml”
+        # Atomic write: build into a temp path, then replace the destination.
+        # Prefer the destination directory so os.replace stays on the same volume.
+        out_dir = None
+        if directory and os.path.isdir(directory) :
+            out_dir = directory
         else :
-            self._zip = None
-            self._zipattr = None
+            parent = os.path.dirname(filepath)
+            if parent and os.path.isdir(parent) :
+                out_dir = parent
+            #end if
         #end if
+        fd, self._temp_filepath = tempfile.mkstemp(
+            suffix = ".zae" if self._is_zae else ".dae",
+            prefix = ".collada_export_",
+            dir = out_dir,
+        )
+        os.close(fd)
+        self._zip = None
+        self._zipattr = None
+        try :
+            if self._is_zae :
+                self._zip = zipfile.ZipFile(self._temp_filepath, "w")
+                class ZipAttr :
+                    compress_type = zipfile.ZIP_DEFLATED
+                    file_attr = 0o100644 << 16
+                    date_time = time.gmtime()[:6]
+                    scene_name = "scene.dae"
+
+                    @classmethod
+                    def new_item(celf, filename) :
+                        item = zipfile.ZipInfo()
+                        item.compress_type = celf.compress_type
+                        item.external_attr = celf.file_attr
+                        item.date_time = celf.date_time
+                        item.filename = filename
+                        return item
+                    #end new_item
+
+                #end ZipAttr
+                self._zipattr = ZipAttr
+                # First item in archive is uncompressed and named “mimetype”, and
+                # contents is MIME type for archive. This way it ends up at a fixed
+                # offset (filename at 30 bytes from start, contents at 38 bytes) for
+                # easy detection by format-sniffing tools. This convention is used
+                # by ODF and other formats similarly based on Zip archives.
+                mimetype = zipfile.ZipInfo()
+                mimetype.filename = "mimetype"
+                mimetype.compress_type = zipfile.ZIP_STORED
+                mimetype.external_attr = ZipAttr.file_attr
+                mimetype.date_time = (2020, 8, 23, 1, 33, 52)
+                  # about when I started getting .zae export working
+                self._zip.writestr(mimetype, b"model/vnd.collada+xml+zip")
+                  # extrapolating from the fact that the official type for .dae files
+                  # is “model/vnd.collada+xml”
+            #end if
+        except Exception :
+            self.abort_temp()
+            raise
+        #end try
         self._up_axis = kwargs["up_axis"]
         if self._up_axis == "Z_UP" :
             self._orient = Matrix.Identity(4)
@@ -161,10 +183,38 @@ class ColladaExport :
         else : # "Y_UP" or unspecified
             self._orient = Matrix.Rotation(- 90 * DEG, 4, "X")
         #end if
+        self._selected_only = kwargs["use_selection"]
+        # Selection-only: include selected objects plus descendants of selected
+        # roots. Selected objects whose parent is unselected are still exported
+        # (as export roots), matching Blender 4.5 spirit.
+        if self._selected_only :
+            export_names = set()
+            selected = [o for o in objects if o.select_get()]
+            for obj in selected :
+                export_names.add(obj.name)
+                # Descendants of selected roots
+                stack = list(obj.children)
+                while stack :
+                    child = stack.pop()
+                    export_names.add(child.name)
+                    stack.extend(child.children)
+                #end while
+            #end for
+            self._export_names = export_names
+            export_objects = [o for o in objects if o.name in export_names]
+        else :
+            self._export_names = None
+            export_objects = list(objects)
+        #end if
         obj_children = {}
-        for obj in objects :
+        for obj in export_objects :
             parent = obj.parent
-            if parent == None :
+            # Treat as root when parent is missing or not in the export set.
+            if parent == None or (
+                    self._export_names is not None
+                and
+                    parent.name not in self._export_names
+            ) :
                 parentname = None
             else :
                 parentname = parent.name
@@ -175,12 +225,14 @@ class ColladaExport :
             obj_children[parentname].add(obj.name)
         #end for
         self._obj_children = obj_children
-        self._selected_only = kwargs["use_selection"]
         self._geometries = {}
         self._materials = {}
         self._collada = Collada()
         self._collada.xmlnode.getroot().set("version", kwargs["collada_version"])
-        self._collada.assetInfo.unitmeter = 1
+        # Scene units from Blender (Blender unit = scale_length metres).
+        unit_settings = bpy.context.scene.unit_settings
+        scale_length = float(getattr(unit_settings, "scale_length", 1.0) or 1.0)
+        self._collada.assetInfo.unitmeter = scale_length
         self._collada.assetInfo.unitname = "metre"
         self._collada.assetInfo.upaxis = self._up_axis
         self._collada.assetInfo.save()
@@ -203,6 +255,26 @@ class ColladaExport :
         self._id_seq = 0
 
     #end __init__
+
+    def abort_temp(self) :
+        "Close any open zip and remove the temp output on failure."
+        if self._zip is not None :
+            try :
+                self._zip.close()
+            except Exception :
+                pass
+            #end try
+            self._zip = None
+        #end if
+        temp = getattr(self, "_temp_filepath", None)
+        if temp and os.path.isfile(temp) :
+            try :
+                os.remove(temp)
+            except OSError :
+                pass
+            #end try
+        #end if
+    #end abort_temp
 
     def write_ext_file(self, category, obj_name, filename, contents) :
         if category not in self._ext_files_map :
@@ -245,20 +317,26 @@ class ColladaExport :
     #end write_ext_file
 
     def save(self) :
-        if self._is_zae :
-            item = self._zipattr.new_item(self._zipattr.scene_name)
-            dae = io.BytesIO()
-            self._collada.write(dae)
-            self._zip.writestr(item, dae.getvalue())
-            manifest = ElementTree.Element("dae_root")
-            manifest.text = self._zipattr.scene_name
-            item = self._zipattr.new_item("manifest.xml")
-            self._zip.writestr(item, ElementTree.tostring(manifest))
-            # all done
-            self._zip.close()
-        else :
-            self._collada.write(self._filepath)
-        #end if
+        try :
+            if self._is_zae :
+                item = self._zipattr.new_item(self._zipattr.scene_name)
+                dae = io.BytesIO()
+                self._collada.write(dae)
+                self._zip.writestr(item, dae.getvalue())
+                manifest = ElementTree.Element("dae_root")
+                manifest.text = self._zipattr.scene_name
+                item = self._zipattr.new_item("manifest.xml")
+                self._zip.writestr(item, ElementTree.tostring(manifest))
+                self._zip.close()
+                self._zip = None
+            else :
+                self._collada.write(self._temp_filepath)
+            #end if
+            os.replace(self._temp_filepath, self._filepath)
+        except Exception :
+            self.abort_temp()
+            raise
+        #end try
     #end save
 
     def blender_technique(self, as_extra, obj) :
@@ -324,10 +402,12 @@ class ColladaExport :
                 }
         elif b_cam.type == "ORTHO" :
             cam_class = OrthographicCamera
+            # Match Blender 4.5 CamerasExporter: xmag/ymag are half of ortho_scale.
+            half = b_cam.ortho_scale / 2.0
             args = \
                 {
-                    "xmag" : b_cam.ortho_scale,
-                    "ymag" : b_cam.ortho_scale,
+                    "xmag" : half,
+                    "ymag" : half,
                 }
         else :
             cam_class = None
@@ -546,8 +626,9 @@ class ColladaExport :
                         ilist.addInput(1, "TEXCOORD", idurl(u[0]), (setnr, 0)[u[1] == active_uv_name])
                         # always assign set 0 to active UV layer
                     #end for
+                    # Only faces assigned to this material slot (not all faces).
                     indices = []
-                    for face in b_mesh.faces :
+                    for face in assigned :
                         for face_loop in face.loops :
                             this_face = [face_loop.vert.index, face_loop.index]
                             indices.extend(this_face)
@@ -580,6 +661,10 @@ class ColladaExport :
         #end if
         matnodes = []
         for slotindex, slot in enumerate(b_material_slots) :
+            # Empty material slots: skip binding (primitive symbol may still exist).
+            if slot.material is None :
+                continue
+            #end if
             sname = slot.material.name
             if sname not in self._materials :
                 self._materials[sname] = self.material(slot.material)
@@ -801,12 +886,20 @@ class ColladaExport :
 
 def save(op, context, filepath, directory, **kwargs) :
     objects = context.scene.objects
-    exporter = ColladaExport(objects, filepath, directory, kwargs)
-    for o in objects :
-        if o.parent == None and (not exporter._selected_only or o.select_get()) :
-            exporter.object(o)
+    exporter = None
+    try :
+        exporter = ColladaExport(objects, filepath, directory, kwargs)
+        # Export roots: objects with no parent in the export set (see __init__).
+        roots = exporter._obj_children.get(None, ())
+        for name in sorted(roots) :
+            exporter.object(bpy.data.objects[name])
+        #end for
+        exporter.save()
+    except Exception :
+        if exporter is not None :
+            exporter.abort_temp()
         #end if
-    #end for
-    exporter.save()
+        raise
+    #end try
     return {"FINISHED"}
 #end save

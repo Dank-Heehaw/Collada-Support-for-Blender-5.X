@@ -481,7 +481,8 @@ class ColladaImport :
                 )
         elif isinstance(bcam.original, OrthographicCamera) :
             b_cam.type = "ORTHO"
-            b_cam.ortho_scale = \
+            # xmag/ymag are half-extents (Blender 4.5); ortho_scale is full width.
+            half = \
                 max \
                   (( # “None” marks cases which shouldn’t occur
                         None, # bcam.aspect_ratio = None and bcam.ymag = None and bcam.xmag = None
@@ -503,6 +504,7 @@ class ColladaImport :
                         (bcam.xmag != None)
                   ]()
                 )
+            b_cam.ortho_scale = 2.0 * half * self._units
         #end if
         if bcam.znear != None :
             b_cam.clip_start = self._units * bcam.znear
@@ -1578,6 +1580,32 @@ def close_collada_archive(collada) :
     #end if
 #end close_collada_archive
 
+def _summarize_collada_errors(collada, limit = 8) :
+    "Build a short operator-friendly summary of pycollada errors/warnings."
+    errs = list(getattr(collada, "errors", None) or [])
+    if not errs :
+        return None, 0
+    #end if
+    # Group by exception type / message prefix for a compact report.
+    counts = {}
+    samples = []
+    for err in errs :
+        key = type(err).__name__
+        msg = str(err).strip() or key
+        counts[key] = counts.get(key, 0) + 1
+        if len(samples) < limit :
+            samples.append("%s: %s" % (key, msg[:120]))
+        #end if
+    #end for
+    parts = ["%s×%d" % (k, counts[k]) for k in sorted(counts.keys())]
+    summary = "COLLADA parse issues (%d): %s" % (len(errs), ", ".join(parts))
+    detail = "; ".join(samples)
+    if len(errs) > limit :
+        detail += "; …"
+    #end if
+    return "%s — %s" % (summary, detail), len(errs)
+#end _summarize_collada_errors
+
 def load(op, ctx, is_zae, filepath, **kwargs) :
 
     def get_obj_matrix(obj) :
@@ -1717,6 +1745,14 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         else :
             c = Collada(filepath, ignore = collada_ignore)
         #end if
+        err_report, err_count = _summarize_collada_errors(c)
+        if err_report :
+            sys.stderr.write("%s\n" % err_report)
+            if op is not None :
+                # Broken refs are ignored for load continuity; still surface them.
+                op.report({"WARNING"}, err_report[:500])
+            #end if
+        #end if
         now = time.time()
         sys.stderr.write("Time to load .dae file = %.2fs\n" % (now - start_time))
         start_time = now
@@ -1786,6 +1822,12 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
             elif failed and not created :
                 op.report({"ERROR"}, "Import failed for all objects; see System Console")
                 return {"CANCELLED"}
+            elif err_count and not failed :
+                # Already reported parse issues above; keep a brief success note.
+                op.report(
+                    {"INFO"},
+                    "Import finished with %d ignored COLLADA warning(s)" % err_count,
+                )
             #end if
         #end if
         return {"FINISHED"}

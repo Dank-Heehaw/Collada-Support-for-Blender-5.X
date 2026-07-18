@@ -82,8 +82,15 @@ If import/export reports that pycollada failed to load:
 
 ## Known limitations
 
-- No skin / armature / animation import or export yet
-- No full custom split-normals parity with Blender’s former native option
+See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 → 2.0).
+
+**Fixed in 1.1.0 (static correctness):** multi-material export indices, empty material slots, selection-only export with unselected parents, atomic DAE/ZAE write, ortho camera scale, scene unit export, and surfaced pycollada parse warnings.
+
+**Still pending:**
+
+- No skin / armature / animation import or export yet (planned 1.4–1.7; see roadmap)
+- No morph / shape-key I/O yet (planned 1.3)
+- No full custom split-normals / vertex-color parity (planned 1.2)
 - Very large files remain CPU-bound during XML parse (pycollada)
 - Nested ZAE sub-archives are not supported
 - Not full feature parity with the old OpenCOLLADA importer/exporter
@@ -98,7 +105,7 @@ If import/export reports that pycollada failed to load:
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (see Preferences; currently **1.0.4**)
+- Add-on version (see Preferences; currently **1.1.0**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output
@@ -113,6 +120,7 @@ dist/                      # rebuilt blender_collada_support.zip (local; not in 
 submission/                # Blender Extensions Platform listing materials
 CONTRIBUTING.md            # developer workflow
 CHANGELOG.md               # release history
+ROADMAP.md                 # staged OpenCOLLADA parity plan
 ```
 
 ## Credits

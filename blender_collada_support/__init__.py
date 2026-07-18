@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Blender Collada Support",
     "author": "Tim Knip, Dusan Maliarik, Lawrence D'Oliveiro, Kims Ferdy, Blender Collade Support",
-    "version": (1, 0, 5),
+    "version": (1, 1, 0),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -281,7 +281,11 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         if os.path.exists(self.filepath) and not os.path.isfile(self.filepath):
             self.report({"ERROR"}, f"Not a file: {kwargs['filepath']}")
             return {"CANCELLED"}
-        return export_collada.save(self, context, **kwargs)
+        try:
+            return export_collada.save(self, context, **kwargs)
+        except Exception as exc:
+            self.report({"ERROR"}, f"COLLADA export failed: {exc}")
+            return {"CANCELLED"}
 
 
 class ColladaSupportPreferences(bpy.types.AddonPreferences):

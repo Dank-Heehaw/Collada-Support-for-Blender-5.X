@@ -2,6 +2,19 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.1.0] — 2026-07-18
+
+Static correctness fixes toward Blender 4.5 parity (see [ROADMAP.md](ROADMAP.md)).
+
+- **Multi-material export:** primitive indices/vcounts filtered to faces for each material slot
+- **Empty material slots:** guard unbound `slot.material` instead of crashing on `.name`
+- **Selection-only export:** selected objects export even when parent is unselected; descendants of selected roots included
+- **Atomic write:** DAE/ZAE written to a temp file then replaced; zip closed and temp removed on failure
+- **Ortho cameras:** export `xmag`/`ymag = ortho_scale / 2`; import converts half-extent and applies unit scale
+- **Parse warnings:** summarize pycollada broken refs / errors in operator reports
+- **Units:** export asset `unitmeter` from Blender `unit_settings.scale_length`
+- Document staged parity plan in `ROADMAP.md`
+
 ## [1.0.5] — 2026-07-18
 
 - Default import **Transformations** mode is now **Parenting** (matches Blender 4.5 group trees)
@@ -41,6 +54,8 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[1.1.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.0
+[1.0.5]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/commits/master
 [1.0.4]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.0.4
 [1.0.3]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.0.3
 [1.0.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/commits/master
