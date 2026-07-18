@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `1.1.3` |
+| Version | `1.2.0` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.1.3.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.2.0.md`
 
 ---
 
@@ -151,19 +151,28 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (1.1.3)
+## Quick paste — Release notes (1.2.0)
 
 ```markdown
-# Collada Support 1.1.3
+# Collada Support 1.2.0
 
 ## Changes
 
-- Removed the add-on preferences status panel
-- Removed failed-load text from the File → Import and Export menu labels
-- Import/export attempts now report the underlying pycollada import error
-- Package id and folder remain **`collada_support`**
+- Prefer Blender’s bundled NumPy over broken leftovers in `scripts/modules` (fixes pycollada load failures)
+- Remove add-on preferences status panel and failed-load menu labels
+- Report the underlying pycollada import error when an import or export is attempted
+- Package id / folder: **`collada_support`**
 
-Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
+## Planned for 2.0
+
+Native OpenCOLLADA-style **export** options are not in 1.2.0. Planned for **2.0**:
+
+- Selection Only, Include Children, Include Armatures, Include Shape Keys
+- Global Orientation: Apply, Forward Axis, Up Axis
+- Texture Options: Copy, UV Only Selected Map
+- Geom / Arm / Anim / Extra export panels
+
+Install **`blender_collada_support.zip`** (or `collada_support.zip`) from Releases (not GitHub **Code → Download ZIP**).
 ```
 
 ---
@@ -174,7 +183,8 @@ Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → D
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_1.1.3.md     ← form: Version release notes
+  RELEASE_NOTES_1.2.0.md     ← form: Version release notes
+  RELEASE_NOTES_1.1.3.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.1.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.0.4.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.0.3.md     ← earlier notes (kept for reference)

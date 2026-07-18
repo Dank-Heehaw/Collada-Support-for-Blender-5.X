@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (1, 1, 3),
+    "version": (1, 2, 0),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -47,14 +47,84 @@ from bpy_extras.io_utils import ExportHelper, ImportHelper
 _ADDON_RELOAD = "HAS_COLLADA" in globals()
 
 
+def _blender_python_site_packages():
+    """Return Blender's bundled Python site-packages (working numpy), if present."""
+    import sys
+
+    candidates = []
+
+    # Typical layout: <install_root>/<major.minor>/python/Lib/site-packages
+    # binary_path is .../blender.exe (Steam and official zip installs).
+    install_root = os.path.dirname(bpy.app.binary_path)
+    version = f"{bpy.app.version[0]}.{bpy.app.version[1]}"
+    candidates.append(
+        os.path.join(install_root, version, "python", "Lib", "site-packages")
+    )
+
+    # Also accept any python/Lib/site-packages already on sys.path.
+    for path in sys.path:
+        norm = path.replace("\\", "/").lower()
+        if norm.endswith("/python/lib/site-packages"):
+            candidates.append(path)
+
+    for candidate in candidates:
+        if candidate and os.path.isdir(os.path.join(candidate, "numpy")):
+            return candidate
+    return None
+
+
+def _purge_numpy_modules():
+    import sys
+
+    for name in list(sys.modules):
+        if name == "numpy" or name.startswith("numpy."):
+            del sys.modules[name]
+
+
+def _prefer_working_numpy():
+    """
+    Prefer Blender's bundled numpy over broken leftovers in scripts/modules.
+
+    A partial pip install into scripts/modules can shadow Blender's numpy and
+    break pycollada with errors like: No module named 'numpy.lib._twodim_base_impl'.
+    """
+    import sys
+
+    site_packages = _blender_python_site_packages()
+    if not site_packages:
+        return
+
+    # Drop any already-imported broken numpy before retrying.
+    mod = sys.modules.get("numpy")
+    if mod is not None:
+        mod_file = (getattr(mod, "__file__", "") or "").replace("\\", "/")
+        if "/scripts/modules/numpy" in mod_file:
+            _purge_numpy_modules()
+
+    if site_packages in sys.path:
+        sys.path.remove(site_packages)
+    sys.path.insert(0, site_packages)
+
+
 def _collada_import_error():
     """Return ImportError from loading pycollada, or None on success."""
+    import sys
+
     try:
+        _prefer_working_numpy()
         import collada  # noqa: F401
 
         return None
     except ImportError as exc:
-        return exc
+        # One retry after clearing a half-loaded numpy.
+        try:
+            _purge_numpy_modules()
+            _prefer_working_numpy()
+            import collada  # noqa: F401
+
+            return None
+        except ImportError as retry_exc:
+            return retry_exc if retry_exc else exc
 
 
 def _refresh_collada_status():

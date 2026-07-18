@@ -2,6 +2,23 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.2.0] — 2026-07-18
+
+Working import/export release after Extensions packaging and pycollada load fixes.
+
+- Prefer Blender’s bundled NumPy over broken leftovers in `scripts/modules` (fixes `numpy.lib._twodim_base_impl` / pycollada load failures)
+- Remove add-on preferences status panel and failed-load menu labels
+- Report the underlying pycollada import error when an import or export is attempted
+
+### Planned for **2.0** (not in 1.2.0)
+
+Native OpenCOLLADA-style **export** operator options (Main tab and related), including:
+
+- **Selection Only** / **Include Children** / **Include Armatures** / **Include Shape Keys**
+- **Global Orientation:** Apply, Forward Axis, Up Axis
+- **Texture Options:** Copy, UV Only Selected Map
+- Full **Geom** / **Arm** / **Anim** / **Extra** export panels toward Blender 4.5 parity
+
 ## [1.1.3] — 2026-07-18
 
 - Remove add-on preferences status panel and failed-load menu labels
@@ -71,6 +88,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[1.2.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.0
 [1.1.3]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.3
 [1.1.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.2
 [1.1.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.1

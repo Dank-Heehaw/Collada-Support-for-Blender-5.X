@@ -86,9 +86,10 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 
 **Still pending:**
 
+- Native OpenCOLLADA-style **export** Main options (Include Children/Armatures/Shape Keys, Global Orientation axes, Texture Copy / UV map) — planned **2.0**
 - No skin / armature / animation import or export yet (planned 1.4–1.7; see roadmap)
 - No morph / shape-key I/O yet (planned 1.3)
-- No full custom split-normals / vertex-color parity (planned 1.2)
+- No full custom split-normals / vertex-color parity (planned 2.0 with export panels)
 - Very large files remain CPU-bound during XML parse (pycollada)
 - Nested ZAE sub-archives are not supported
 - Not full feature parity with the old OpenCOLLADA importer/exporter
@@ -103,7 +104,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **1.1.3**)
+- Add-on version (currently **1.2.0**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output

@@ -6,13 +6,22 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 
 | Version | Focus |
 | --- | --- |
-| **1.1.0–1.1.3** (current) | Static correctness (1.1.0) + Extensions compliance / package id `collada_support` (1.1.1–1.1.3) |
-| **1.2.0** | Static scene parity — custom/split normals, vertex colors, modifiers / evaluated-mesh options, UV bindings, units/axis options, native Blender profile extras |
+| **1.1.0–1.1.3** | Static correctness + Extensions compliance / package id `collada_support` |
+| **1.2.0** (current) | Working wheels-only release; NumPy/pycollada load hardening |
 | **1.3.0** | Morph / shape-key **import** (then export) |
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
 | **1.5.0** | Armature + skin **export** |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
-| **2.0** | Parity candidate + interoperability suite |
+| **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite |
+
+### Export options deferred to **2.0**
+
+Match Blender 4.5’s COLLADA exporter Main panel (and later tabs):
+
+- Selection Only, Include Children, Include Armatures, Include Shape Keys
+- Global Orientation: Apply, Forward Axis, Up Axis
+- Texture Options: Copy, UV Only Selected Map
+- Geom / Arm / Anim / Extra panels toward full parity
 
 ## What 1.1.0 fixed vs still pending
 
