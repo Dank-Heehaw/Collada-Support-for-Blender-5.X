@@ -7,13 +7,21 @@ Restores **COLLADA (`.dae` / `.zae`) import and export** for Blender 5 after nat
 
 Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada_importexport) → [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport)), with crash/perf hardening guided by Blender **4.5’s native** `MeshImporter` / `DocumentImporter` (batch mesh writes, topology validation, no `bpy.ops` during import).
 
+## Download
+
+**Blender users should download [`blender_collada_support.zip`](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/latest/download/blender_collada_support.zip) from the latest release.**
+
+Do **not** use GitHub's green **Code → Download ZIP** button. That downloads the source repository, not the installable Blender extension.
+
 ## Install
 
-1. Use `dist/blender_collada_support.zip` (or zip the `blender_collada_support` folder).
-2. Blender 5: **Edit → Preferences → Add-ons → Install…** → select the zip.
-3. Enable **Blender Collada Support**.
-4. `pycollada` is **bundled as wheels** — no install step needed in normal use.
-5. Preferences offer **Update / Reinstall pycollada** as an optional network fallback if the bundled wheels fail to load or need updating.
+1. Download the release asset named **`blender_collada_support.zip`** using the link above.
+2. In Blender 5, open **Edit → Preferences → Add-ons → Install from Disk…**.
+3. Select the downloaded **`blender_collada_support.zip`** file. Do not extract it first.
+4. Enable **Blender Collada Support**.
+5. `pycollada` is bundled — no separate dependency install is needed.
+
+Preferences offer **Update / Reinstall pycollada** as an optional network fallback if the bundled wheels fail to load or need updating.
 
 Menus:
 
@@ -57,8 +65,8 @@ Aligned with Blender 4.5 native importer patterns:
 
 ```
 blender_collada_support/     # installable package (includes wheels/)
-reference/                   # upstream clones (not shipped)
 dist/                        # distributable zip
+submission/                  # Blender Extensions listing materials
 ```
 
 ## License
