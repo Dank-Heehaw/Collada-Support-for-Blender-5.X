@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (1, 2, 1),
+    "version": (1, 3, 0),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -39,6 +39,7 @@ from bpy.props import (
     BoolProperty,
     CollectionProperty,
     EnumProperty,
+    FloatProperty,
     StringProperty,
 )
 from bpy_extras.io_utils import ExportHelper, ImportHelper
@@ -138,12 +139,19 @@ HAS_COLLADA = False
 COLLADA_IMPORT_ERROR = None
 _refresh_collada_status()
 
-# Reload I/O modules only when pycollada is available (they import it at top level).
-if _ADDON_RELOAD and HAS_COLLADA:
-    from . import export_collada, import_collada
+if _ADDON_RELOAD:
+    # The Cabinet Vision profile reads COLLADA XML directly, so it reloads
+    # (and works) whether or not pycollada is available.
+    from . import import_cabinet_vision
 
-    importlib.reload(import_collada)
-    importlib.reload(export_collada)
+    importlib.reload(import_cabinet_vision)
+
+    # The general path imports pycollada at module level.
+    if HAS_COLLADA:
+        from . import export_collada, import_collada
+
+        importlib.reload(import_collada)
+        importlib.reload(export_collada)
 
 
 class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
@@ -162,6 +170,26 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
         type=bpy.types.OperatorFileListElement,
     )
     directory: StringProperty(subtype="DIR_PATH")
+
+    profile: EnumProperty(
+        name="Profile",
+        description="Which importer to use for this file",
+        items=(
+            (
+                "GENERAL",
+                "General",
+                "General COLLADA import (SketchUp, exporters, DCC tools)",
+            ),
+            (
+                "CABINET_VISION",
+                "Cabinet Vision",
+                "Cabinet Vision COLLADA export: library node instances, "
+                "polygons with holes (bores/cutouts), joined panels and "
+                "assembly collections",
+            ),
+        ),
+        default="GENERAL",
+    )
 
     recognize_blender_extensions: BoolProperty(
         name="Recognize Blender Extensions",
@@ -186,7 +214,125 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
         default="PARENT",
     )
 
+    cv_join_parts: BoolProperty(
+        name="Join Parts",
+        description=(
+            "Merge each physical part's faces, edgebanding and boring/dado "
+            "into a single selectable object"
+        ),
+        default=True,
+    )
+    cv_merge_by_distance: BoolProperty(
+        name="Merge Vertices by Distance",
+        description=(
+            "After joining, weld the duplicate seam vertices left over from "
+            "merging independently tessellated faces, edgebanding and boring"
+        ),
+        default=True,
+    )
+    cv_merge_distance: FloatProperty(
+        name="Distance",
+        description="Vertices closer together than this are welded",
+        default=0.0001,
+        min=0.0,
+        precision=5,
+        unit="LENGTH",
+    )
+    cv_clean_topology: BoolProperty(
+        name="Clean Topology",
+        description=(
+            "Limited Dissolve plus Tris to Quads on each joined object. Off by "
+            "default: it changes how many faces bound a bore hole (though it "
+            "never moves a vertex), which matters when something downstream "
+            "depends on Cabinet Vision's exact triangulation"
+        ),
+        default=False,
+    )
+    cv_fix_hidden_dados: BoolProperty(
+        name="Fix Hidden Dado/Notch Faces",
+        description=(
+            "Cabinet Vision sometimes exports a panel's dado/notch pocket "
+            "correctly but leaves the panel's own flat face uncut over it, "
+            "hiding the pocket behind solid material. Find that pattern and "
+            "cut the covering portion away. Off by default since it deletes "
+            "geometry"
+        ),
+        default=False,
+    )
+    cv_hide_feature_parts: BoolProperty(
+        name="Hide Dado/Notch Feature Geometry",
+        description=(
+            "Route DADO/NOTCH feature geometry (e.g. 'UBDADO') to a hidden "
+            "'CV Hidden Features' collection instead of fusing it into the "
+            "panel's merged mesh, since it is typically redundant duplicate "
+            "geometry. BORE (boring/drilling) geometry always stays merged and "
+            "visible. Turn off when a pocket only exists under one of these "
+            "feature nodes and you rely on Fix Hidden Dado/Notch Faces"
+        ),
+        default=True,
+    )
+    cv_flip_uv_v: BoolProperty(
+        name="Flip UV (V Axis)",
+        description="Enable when textures appear upside-down",
+        default=False,
+    )
+    cv_mark_hard_edges: BoolProperty(
+        name="Mark Hard Edges as Seams",
+        description=(
+            "Mark every edge where two adjacent faces meet at more than about "
+            "40 degrees as a UV seam, so a later unwrap has sensible cut lines "
+            "without hand-marking every part. Only sets seam flags"
+        ),
+        default=True,
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(self, "profile")
+        layout.separator()
+        if self.profile == "CABINET_VISION":
+            layout.prop(self, "cv_join_parts")
+            layout.prop(self, "cv_merge_by_distance")
+            row = layout.row()
+            row.enabled = self.cv_merge_by_distance
+            row.prop(self, "cv_merge_distance")
+            layout.prop(self, "cv_hide_feature_parts")
+            layout.prop(self, "cv_fix_hidden_dados")
+            layout.prop(self, "cv_clean_topology")
+            layout.prop(self, "cv_mark_hard_edges")
+            layout.prop(self, "cv_flip_uv_v")
+        else:
+            layout.prop(self, "transformation")
+            layout.prop(self, "recognize_blender_extensions")
+
     def execute(self, context):
+        if not os.path.isfile(self.filepath):
+            self.report({"ERROR"}, f"Not a file: {self.filepath}")
+            return {"CANCELLED"}
+        is_archive = self.filepath.lower().endswith((".zae", ".kmz", ".zip"))
+
+        if self.profile == "CABINET_VISION":
+            # The Cabinet Vision profile parses the COLLADA XML itself, so it
+            # does not need pycollada.
+            from . import import_cabinet_vision
+
+            return import_cabinet_vision.load(
+                self,
+                context,
+                is_archive,
+                self.filepath,
+                join_parts=self.cv_join_parts,
+                merge_by_distance=self.cv_merge_by_distance,
+                merge_distance=self.cv_merge_distance,
+                clean_topology=self.cv_clean_topology,
+                fix_hidden_dados=self.cv_fix_hidden_dados,
+                hide_feature_parts=self.cv_hide_feature_parts,
+                flip_uv_v=self.cv_flip_uv_v,
+                mark_hard_edges=self.cv_mark_hard_edges,
+            )
+
         if not _refresh_collada_status():
             detail = COLLADA_IMPORT_ERROR or "unknown import error"
             self.report({"ERROR"}, f"pycollada is not available: {detail}")
@@ -194,13 +340,14 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
 
         from . import import_collada
 
-        kwargs = self.as_keywords(ignore=("filter_glob", "files"))
-        if not os.path.isfile(kwargs["filepath"]):
-            self.report({"ERROR"}, f"Not a file: {kwargs['filepath']}")
-            return {"CANCELLED"}
-        lower = self.filepath.lower()
-        is_archive = lower.endswith((".zae", ".kmz", ".zip"))
-        return import_collada.load(self, context, is_archive, **kwargs)
+        return import_collada.load(
+            self,
+            context,
+            is_archive,
+            self.filepath,
+            recognize_blender_extensions=self.recognize_blender_extensions,
+            transformation=self.transformation,
+        )
 
 
 class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
