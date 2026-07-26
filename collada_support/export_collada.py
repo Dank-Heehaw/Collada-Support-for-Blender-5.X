@@ -627,11 +627,17 @@ class ColladaExport :
                         # always assign set 0 to active UV layer
                     #end for
                     # Only faces assigned to this material slot (not all faces).
+                    # VERTEX and NORMAL both index per-vertex sources at offset
+                    # 0, so a loop index only belongs in the run when a per-loop
+                    # input (TEXCOORD, offset 1) is actually declared -- writing
+                    # it unconditionally overruns the vertex source.
                     indices = []
                     for face in assigned :
                         for face_loop in face.loops :
-                            this_face = [face_loop.vert.index, face_loop.index]
-                            indices.extend(this_face)
+                            indices.append(face_loop.vert.index)
+                            if uv_ids :
+                                indices.append(face_loop.index)
+                            #end if
                         #end for
                     #end for
                     indices = np.array(indices)

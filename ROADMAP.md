@@ -7,12 +7,27 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | Version | Focus |
 | --- | --- |
 | **1.1.0–1.1.3** | Static correctness + Extensions compliance / package id `collada_support` |
-| **1.2.0–1.2.1** (current) | Working wheels-only release; NumPy/pycollada load hardening; leaner Parenting Empties + import progress (1.2.1) |
-| **1.3.0** | Morph / shape-key **import** (then export) |
+| **1.2.0–1.2.1** | Working wheels-only release; NumPy/pycollada load hardening; leaner Parenting Empties + import progress (1.2.1) |
+| **1.3.0** (current) | **Cabinet Vision import profile**: library node instances, polygons with holes, joined panels, assembly collections, bore handling |
+| **1.3.1** | Morph / shape-key **import** (then export) — moved off 1.3.0 |
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
 | **1.5.0** | Armature + skin **export** |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
 | **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite |
+
+## Cabinet Vision profile (1.3.0)
+
+Landed as a second import profile on the existing operator, in
+`collada_support/import_cabinet_vision.py`, derived from
+[Cabinet-Vision-to-Blender](https://github.com/ihartred-cpu/Cabinet-Vision-to-Blender)
+(MIT, ihartred-cpu). `import_collada.py` remains the general / SketchUp path.
+
+**Follow-ups not in 1.3.0**
+
+- Validation against a wider sample of real CV jobs (multi-room, countertops, moldings, hardware-heavy doors)
+- CV cameras / scene lighting beyond the basic `library_lights` mapping
+- Optionally parenting CV assemblies to Empties as well as collections
+- Reusing one hole-tessellation code path between the general importer and the CV profile (they parse different object models today)
 
 ### Export options deferred to **2.0**
 
