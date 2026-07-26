@@ -23,6 +23,7 @@ from collada.primitive import BoundPrimitive
 from collada.scene import Scene, Node, NodeNode, CameraNode, GeometryNode, LightNode
 from collada.triangleset import TriangleSet, BoundTriangleSet
 from collada.xmlutil import etree as ElementTree
+from mathutils.geometry import tessellate_polygon
 
 try :
     import numpy as np
@@ -113,6 +114,189 @@ def _face_index_list(prim) :
     # Fallback: pycollada element iteration (slow on large meshes).
     return [tuple(int(x) for x in getattr(elt, "indices")) for elt in prim]
 #end _face_index_list
+
+def _same_ns_tag(elem, name) :
+    "Child tag name in the same XML namespace as elem."
+    elem_tag = str(elem.tag)
+    if elem_tag.startswith("{") :
+        return "%s}%s" % (elem_tag[:elem_tag.index("}")], name)
+    #end if
+    return name
+#end _same_ns_tag
+
+def _decode_index_block(block, stride, pos_off, uv_off, uv_src, nverts) :
+    "Split one <p>/<h> index run into a vertex-index face and its UV corners."
+    ncorners = len(block) // stride
+    face = []
+    uvs = [] if uv_src is not None and uv_off is not None else None
+    for corner in range(ncorners) :
+        chunk = block[corner * stride : (corner + 1) * stride]
+        if len(chunk) < stride :
+            return (), None
+        #end if
+        index = chunk[pos_off]
+        if index < 0 or index >= nverts :
+            return (), None
+        #end if
+        face.append(index)
+        if uvs is not None :
+            uv_index = chunk[uv_off]
+            if 0 <= uv_index < len(uv_src) :
+                uv = tuple(uv_src[uv_index])[:2]
+            else :
+                uv = (0.0, 0.0)
+            #end if
+            uvs.append(uv)
+        #end if
+    #end for
+    if len(face) < 3 or len(set(face)) < 3 :
+        return (), None
+    #end if
+    return tuple(face), uvs
+#end _decode_index_block
+
+def _polygons_hole_faces(op, verts) :
+    """Tessellate <polygons> holes (<ph>/<h>), which pycollada drops.
+
+    Panel faces with drilled bores or routed cutouts are written this way by
+    CAD exporters (Cabinet Vision in particular); pycollada only reads the
+    direct <p> children, so such a primitive arrives with no faces at all.
+    Returns (faces, uv_faces) as indices into the primitive's vertex source,
+    or ((), None) when there is no <ph> data to recover.
+    """
+    xml = getattr(op, "xmlnode", None)
+    if xml is None or not str(xml.tag).endswith("polygons") :
+        return (), None
+    #end if
+    ph_elems = xml.findall(_same_ns_tag(xml, "ph"))
+    if not ph_elems :
+        return (), None
+    #end if
+    vertex_input = op.sources.get("VERTEX")
+    if not vertex_input :
+        return (), None
+    #end if
+    stride = int(getattr(op, "nindices", 1) or 1)
+    pos_off = int(vertex_input[0][0])
+    tex_input = op.sources.get("TEXCOORD") or ()
+    uv_off = int(tex_input[0][0]) if tex_input else None
+    uv_src = tex_input[0][4].data if tex_input else None
+    nverts = len(verts)
+    p_tag = _same_ns_tag(xml, "p")
+    h_tag = _same_ns_tag(xml, "h")
+
+    faces = []
+    uv_faces = []
+
+    def emit(face, uvs) :
+        faces.append(face)
+        uv_faces.append(uvs)
+    #end emit
+
+    for ph in ph_elems :
+        outer_elem = ph.find(p_tag)
+        if outer_elem is None or not (outer_elem.text or "").strip() :
+            continue
+        #end if
+        try :
+            outer, outer_uvs = _decode_index_block(
+                [int(x) for x in outer_elem.text.split()],
+                stride, pos_off, uv_off, uv_src, nverts,
+            )
+        except ValueError :
+            continue
+        #end try
+        if not outer :
+            continue
+        #end if
+        holes = []
+        for h_elem in ph.findall(h_tag) :
+            if not (h_elem.text or "").strip() :
+                continue
+            #end if
+            try :
+                hole, hole_uvs = _decode_index_block(
+                    [int(x) for x in h_elem.text.split()],
+                    stride, pos_off, uv_off, uv_src, nverts,
+                )
+            except ValueError :
+                continue
+            #end try
+            if hole :
+                holes.append((hole, hole_uvs))
+            #end if
+        #end for
+        if not holes :
+            emit(outer, outer_uvs)
+            continue
+        #end if
+        # tessellate_polygon indexes into the concatenated contour list, so
+        # keep outer-then-holes order and map results back through it.
+        ring = list(outer)
+        for hole, _hole_uvs in holes :
+            ring.extend(hole)
+        #end for
+        uv_by_index = {}
+        if outer_uvs :
+            uv_by_index.update(zip(outer, outer_uvs))
+        #end if
+        for hole, hole_uvs in holes :
+            if hole_uvs :
+                for index, uv in zip(hole, hole_uvs) :
+                    uv_by_index.setdefault(index, uv)
+                #end for
+            #end if
+        #end for
+        contours = [list(Vector(tuple(verts[i])[:3]) for i in outer)]
+        for hole, _hole_uvs in holes :
+            contours.append(list(Vector(tuple(verts[i])[:3]) for i in hole))
+        #end for
+        try :
+            tris = tessellate_polygon(contours)
+        except Exception as exc :
+            sys.stderr.write(
+                "import_collada: polygon-with-holes tessellation failed: %s\n" % exc
+            )
+            emit(outer, outer_uvs)
+            continue
+        #end try
+        for tri in tris :
+            face = tuple(ring[tri[i]] for i in range(3))
+            if len(set(face)) < 3 :
+                continue
+            #end if
+            emit(
+                face,
+                [uv_by_index.get(i, (0.0, 0.0)) for i in face] if uv_by_index else None,
+            )
+        #end for
+    #end for
+    return faces, (uv_faces if faces else None)
+#end _polygons_hole_faces
+
+def _primitive_vertices(prim, op) :
+    """Vertex positions for a primitive, in the primitive's own index space.
+
+    pycollada leaves .vertex unset for a <polygons> set whose faces live only
+    in <ph> elements, so fall back to the raw VERTEX source (transformed by the
+    bind matrix when the primitive is bound).
+    """
+    verts = getattr(prim, "vertex", None)
+    if verts is not None :
+        return verts
+    #end if
+    vertex_input = op.sources.get("VERTEX")
+    if not vertex_input :
+        return None
+    #end if
+    data = vertex_input[0][4].data
+    matrix = getattr(prim, "matrix", None)
+    if matrix is None :
+        return [tuple(v)[:3] for v in data]
+    #end if
+    mat = Matrix([[float(x) for x in row] for row in matrix])
+    return [tuple(mat @ Vector(tuple(v)[:3])) for v in data]
+#end _primitive_vertices
 
 def set_shader_input(shader, names, value) :
     "Set the first matching Principled BSDF input among Blender version aliases."
@@ -790,7 +974,13 @@ class ColladaImport :
                 #end if
 
                 these_faces = _face_index_list(p)
-                if not these_faces :
+                these_verts = _primitive_vertices(p, op)
+                hole_uvs = None
+                if not these_faces and these_verts is not None :
+                    # <polygons> with holes: recover the contours pycollada drops.
+                    these_faces, hole_uvs = _polygons_hole_faces(op, these_verts)
+                #end if
+                if not these_faces or these_verts is None :
                     continue
                 #end if
 
@@ -801,7 +991,7 @@ class ColladaImport :
                     vert_start = len(verts)
                     vert_starts[verts_source_id] = vert_start
                     try :
-                        verts.extend(tuple(v) for v in p.vertex)
+                        verts.extend(tuple(v) for v in these_verts)
                     except Exception as exc :
                         sys.stderr.write(
                             "import_collada: skipped vertices for %s: %s\n"
@@ -869,9 +1059,28 @@ class ColladaImport :
                     if uvcoords is not None and len(uvcoords) == n_uv :
                         # Prefer index arrays over Triangle object iteration.
                         wrote = False
+                        if hole_uvs is not None :
+                            # Hole faces are generated here, so pycollada's
+                            # per-corner index arrays do not describe them.
+                            for layer_i in range(n_uv) :
+                                for fi in range(nfaces) :
+                                    coords = hole_uvs[fi] if layer_i == 0 else None
+                                    if coords :
+                                        uvcoords[layer_i].append(
+                                            [tuple(c) for c in coords]
+                                        )
+                                    else :
+                                        uvcoords[layer_i].append(
+                                            [(0.0, 0.0)] * len(these_faces[fi])
+                                        )
+                                    #end if
+                                #end for
+                            #end for
+                            wrote = True
+                        #end if
                         try :
-                            tex_sets = getattr(p, "texcoord_indexset", None)
-                            tex_src = getattr(p, "texcoordset", None)
+                            tex_sets = None if wrote else getattr(p, "texcoord_indexset", None)
+                            tex_src = None if wrote else getattr(p, "texcoordset", None)
                             if tex_sets is not None and tex_src is not None :
                                 for layer_i in range(min(n_uv, len(tex_sets))) :
                                     idxs = tex_sets[layer_i]
