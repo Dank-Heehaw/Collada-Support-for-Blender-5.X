@@ -17,6 +17,7 @@ Cabinet Vision (CV) COLLADA import support.
 - **Legacy exports:** non-finite floats written by old Microsoft C runtimes (`-1.#IND`, `1.#QNAN`, truncated `-1.#J`, …) are coerced to `0.0` and reported instead of aborting the import.
 - **Performance:** each geometry is decoded once and cached, meshes are assembled directly (no temporary objects + Join operator), and UVs / material indices / transforms are written in bulk via `foreach_set` and NumPy where available.
 - The Cabinet Vision profile parses COLLADA XML directly, so it also works when the bundled pycollada wheels fail to load.
+- **Fixed (export):** exporting a mesh with **no UV layer** failed with `DaeMalformedError: Indexes … go beyond the limits of the source`. Each face corner emitted both a vertex index and a loop index, but the loop index only has a declared input (`TEXCOORD`, offset 1) when a UV layer exists — so without UVs the loop indices were read as vertex indices. The loop index is now written only when it is actually declared; files exported from meshes that do have UVs are unchanged.
 - **Credit:** the CV profile is derived from [Cabinet-Vision-to-Blender](https://github.com/ihartred-cpu/Cabinet-Vision-to-Blender) by **ihartred-cpu**, reused under the MIT license (see `THIRD_PARTY_LICENSES.md`).
 
 ## [1.2.1] — 2026-07-18
