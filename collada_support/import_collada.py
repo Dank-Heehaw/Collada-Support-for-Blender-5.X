@@ -199,6 +199,108 @@ def collada_label(obj) :
     return None
 #end collada_label
 
+def _matrix_is_identity(mat, eps = 1e-5) :
+    "True when mat is effectively a 4x4 identity (after unit conversion)."
+    for i in range(4) :
+        for j in range(4) :
+            expect = 1.0 if i == j else 0.0
+            if abs(mat[i][j] - expect) > eps :
+                return False
+            #end if
+        #end for
+    #end for
+    return True
+#end _matrix_is_identity
+
+def _node_has_meaningful_name(src) :
+    """
+    True when the COLLADA node has a useful display name worth keeping as an Empty.
+    Bare/missing names and names that only echo the XML id are not meaningful.
+    """
+    xml = getattr(src, "xmlnode", None)
+    name = None
+    nid = getattr(src, "id", None)
+    if xml is not None :
+        name = xml.get("name")
+        if not nid :
+            nid = xml.get("id")
+        #end if
+    #end if
+    if not name :
+        return False
+    #end if
+    if nid and name == nid :
+        return False
+    #end if
+    # Machine-style ids (ID123, node_45) are not worth an Empty by themselves.
+    compact = name.replace("-", "").replace("_", "")
+    if compact.upper().startswith("ID") and compact[2:].isalnum() :
+        return False
+    #end if
+    if name.lower().startswith("node") and compact[4:].isdigit() :
+        return False
+    #end if
+    return True
+#end _node_has_meaningful_name
+
+def _node_src(node) :
+    return node.node if isinstance(node, NodeNode) else node
+#end _node_src
+
+class _ImportProgress :
+    "Best-effort Blender status-bar progress for long COLLADA imports."
+
+    def __init__(self, wm, total_steps = 100) :
+        self.wm = wm
+        self.total_steps = max(int(total_steps), 1)
+        self.current = 0
+        self._active = False
+        if self.wm is not None :
+            try :
+                self.wm.progress_begin(0, 100)
+                self._active = True
+                self.wm.progress_update(0)
+            except Exception :
+                self._active = False
+            #end try
+        #end if
+    #end __init__
+
+    def update_fraction(self, fraction) :
+        if not self._active :
+            return
+        #end if
+        pct = max(0, min(100, int(round(fraction * 100.0))))
+        try :
+            self.wm.progress_update(pct)
+        except Exception :
+            pass
+        #end try
+    #end update_fraction
+
+    def set_steps(self, total_steps) :
+        self.total_steps = max(int(total_steps), 1)
+        self.current = 0
+    #end set_steps
+
+    def step(self, n = 1) :
+        self.current = min(self.current + n, self.total_steps)
+        self.update_fraction(self.current / float(self.total_steps))
+    #end step
+
+    def end(self) :
+        if not self._active :
+            return
+        #end if
+        try :
+            self.wm.progress_end()
+        except Exception :
+            pass
+        #end try
+        self._active = False
+    #end end
+#end _ImportProgress
+
 def find_main_shader(in_datablock, type_name) :
     node_graph = in_datablock.node_tree
     shader = list(n for n in node_graph.nodes if n.type == type_name)[0]
@@ -1662,16 +1764,37 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
     #end get_obj_matrix
 
     last_update = None
-    update_interval = 5
+    update_interval = 0.25
     obj_count = nr_objs = 0
+    progress = None
 
-    def traverse_children(self, node, action, parent) :
-        nonlocal last_update, obj_count
+    def count_hierarchy_nodes(node) :
+        "Pre-count Node/Scene steps for Parenting-mode progress."
+        total = 1
+        children = ()
+        if isinstance(node, Scene) :
+            children = node.nodes
+        elif isinstance(node, Node) :
+            children = node.children
+        elif isinstance(node, NodeNode) :
+            children = node.node.children
+        #end if
+        for child in children :
+            if isinstance(child, (Scene, Node, NodeNode, CameraNode, GeometryNode, LightNode)) :
+                total += count_hierarchy_nodes(child)
+            #end if
+        #end for
+        return total
+    #end count_hierarchy_nodes
+
+    def traverse_children(self, node, action, parent, accum_matrix = None) :
+        nonlocal last_update, obj_count, progress
         obj_count += 1
+        if progress is not None :
+            progress.step(1)
+        #end if
         now = time.time()
         if now - last_update >= update_interval :
-            #sys.stderr.write("created %d/%d objects\n" % (obj_count, nr_objs))
-              # nr_objs not computed accurately (see below)
             sys.stderr.write("created %d objects\n" % obj_count)
             last_update = now
         #end if
@@ -1679,6 +1802,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         empty_children = ()
         nonempty_children = ()
         node_matrix = None
+        is_group_node = False
         rule = tuple \
           (
             entry
@@ -1693,7 +1817,8 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         if len(rule) != 0 :
             rule = rule[0]
             children = rule[1](node)
-            if rule[2] :
+            is_group_node = rule[2]
+            if is_group_node :
                 empty_children = tuple \
                   ( # children which would be represented as Empty objects
                     c
@@ -1706,21 +1831,56 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                     for c in children
                     if isinstance(c, (CameraNode, GeometryNode, LightNode)) # ControllerNode NYI
                   )
-                node_matrix = self._convert_units_matrix(Matrix(node.matrix))
+                src = _node_src(node)
+                node_matrix = self._convert_units_matrix(Matrix(src.matrix))
             #end if
         #end if
-        if node_matrix != None and len(nonempty_children) == 1 :
+        if accum_matrix is not None :
+            if node_matrix is not None :
+                combined = accum_matrix @ node_matrix
+            else :
+                combined = accum_matrix
+            #end if
+        else :
+            combined = node_matrix
+        #end if
+
+        # Collapse pass-through group nodes: identity transform, no meaningful
+        # name, and a single child (another group or one object). Fold the
+        # transform into descendants instead of creating an Empty.
+        if (
+            is_group_node
+            and combined is not None
+            and len(children) == 1
+            and _matrix_is_identity(combined)
+            and not _node_has_meaningful_name(_node_src(node))
+        ) :
+            child = children[0]
+            if isinstance(child, (Node, NodeNode)) :
+                traverse_children(self, child, action, parent, combined)
+            elif isinstance(child, (CameraNode, GeometryNode, LightNode)) :
+                action(child, parent, combined)
+            #end if
+            return
+        #end if
+
+        if combined is not None and len(nonempty_children) == 1 :
             # make the nonempty child the parent of the other children,
             # instead of creating an Empty for this Node.
-            new_parent = action(nonempty_children[0], parent, node_matrix)
+            new_parent = action(nonempty_children[0], parent, combined)
             for child in empty_children :
-                traverse_children(self, child, action, new_parent)
+                traverse_children(self, child, action, new_parent, None)
             #end for
         else :
-            # create an Empty for this Node.
-            new_parent = action(node, parent)
+            # create an Empty for this Node (or process Scene).
+            # For group nodes, pass accum so outer collapsed transforms apply.
+            if is_group_node and accum_matrix is not None :
+                new_parent = action(node, parent, accum_matrix)
+            else :
+                new_parent = action(node, parent)
+            #end if
             for child in children :
-                traverse_children(self, child, action, new_parent)
+                traverse_children(self, child, action, new_parent, None)
             #end for
         #end if
     #end traverse_children
@@ -1731,7 +1891,11 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
     archive_exts = (".zae", ".kmz", ".zip")
     is_archive = is_zae or filepath.lower().endswith(archive_exts)
     c = None
+    wm = getattr(ctx, "window_manager", None)
+    progress = _ImportProgress(wm, 100)
     try :
+        # Phase A: parse COLLADA / archive (synchronous; UI may still stall here).
+        progress.update_fraction(0.02)
         if is_archive :
             try :
                 c = open_collada_archive(filepath, collada_ignore)
@@ -1745,6 +1909,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         else :
             c = Collada(filepath, ignore = collada_ignore)
         #end if
+        progress.update_fraction(0.15)
         err_report, err_count = _summarize_collada_errors(c)
         if err_report :
             sys.stderr.write("%s\n" % err_report)
@@ -1756,13 +1921,24 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         now = time.time()
         sys.stderr.write("Time to load .dae file = %.2fs\n" % (now - start_time))
         start_time = now
+        progress.update_fraction(0.18)
         importer = get_import(c)(ctx, c, filepath, **kwargs)
         tf = importer._transformation
         created = 0
         failed = 0
+        progress.update_fraction(0.20)
         if tf in ("MUL", "APPLY") :
+            all_jobs = []
             for handle_type in importer.obj_type_handlers :
                 objs = list(c.scene.objects(handle_type[0]))
+                all_jobs.append((handle_type, objs))
+            #end for
+            total_objs = sum(len(objs) for _, objs in all_jobs) or 1
+            # Object creation spans 20%..100% of the bar.
+            progress.set_steps(total_objs)
+            # Remap step() into the creation band via custom stepping below.
+            done = 0
+            for handle_type, objs in all_jobs :
                 nr_objs = len(objs)
                 last_update = start_time
                 for i, obj in enumerate(objs) :
@@ -1775,12 +1951,18 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                             % (handle_type[0], i + 1, nr_objs, exc)
                         )
                         traceback.print_exc()
+                        done += 1
+                        progress.update_fraction(0.20 + 0.80 * (done / float(total_objs)))
                         continue
                     #end try
                     if b_obj is None :
+                        done += 1
+                        progress.update_fraction(0.20 + 0.80 * (done / float(total_objs)))
                         continue
                     #end if
                     created += 1
+                    done += 1
+                    progress.update_fraction(0.20 + 0.80 * (done / float(total_objs)))
                     now = time.time()
                     if now - last_update >= update_interval :
                         sys.stderr.write(
@@ -1801,6 +1983,23 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         elif tf == "PARENT" :
             last_update = start_time
             try :
+                total_nodes = count_hierarchy_nodes(c.scene) or 1
+                # Hierarchy walk spans 20%..100%; step() uses 0..total_nodes then remap.
+                hierarchy_steps = {"n": 0, "total": total_nodes}
+
+                def parent_progress_step(n = 1) :
+                    hierarchy_steps["n"] = min(
+                        hierarchy_steps["n"] + n, hierarchy_steps["total"]
+                    )
+                    progress.update_fraction(
+                        0.20
+                        + 0.80
+                        * (hierarchy_steps["n"] / float(hierarchy_steps["total"]))
+                    )
+                #end parent_progress_step
+
+                # Rebind progress.step used inside traverse_children.
+                progress.step = parent_progress_step
                 traverse_children(importer, c.scene, importer.parent_node, None)
             except Exception as exc :
                 sys.stderr.write("import_collada: hierarchy import failed: %s\n" % exc)
@@ -1811,6 +2010,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                 return {"CANCELLED"}
             #end try
         #end if
+        progress.update_fraction(1.0)
         now = time.time()
         sys.stderr.write("Time to import to Blender = %.2fs\n" % (now - start_time))
         if op is not None :
@@ -1832,6 +2032,9 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         #end if
         return {"FINISHED"}
     finally :
+        if progress is not None :
+            progress.end()
+        #end if
         if c is not None :
             close_collada_archive(c)
         #end if

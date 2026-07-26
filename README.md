@@ -94,6 +94,8 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 - Nested ZAE sub-archives are not supported
 - Not full feature parity with the old OpenCOLLADA importer/exporter
 - Hierarchy under **Multiply** is intentionally flat; use **Parenting** (default) for SketchUp-style groups
+- Parenting still creates Empties for named groups / non-identity transforms; only identity unnamed single-child wrappers are collapsed (1.2.1+)
+- Large-file XML parse can still freeze the UI briefly before the import progress bar advances
 
 ## Troubleshooting
 
@@ -104,7 +106,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **1.2.0**)
+- Add-on version (currently **1.2.1**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output

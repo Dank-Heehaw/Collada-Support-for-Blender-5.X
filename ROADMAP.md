@@ -7,7 +7,7 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | Version | Focus |
 | --- | --- |
 | **1.1.0–1.1.3** | Static correctness + Extensions compliance / package id `collada_support` |
-| **1.2.0** (current) | Working wheels-only release; NumPy/pycollada load hardening |
+| **1.2.0–1.2.1** (current) | Working wheels-only release; NumPy/pycollada load hardening; leaner Parenting Empties + import progress (1.2.1) |
 | **1.3.0** | Morph / shape-key **import** (then export) |
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
 | **1.5.0** | Armature + skin **export** |
