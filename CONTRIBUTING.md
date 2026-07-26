@@ -16,9 +16,11 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 | `collada_support/` | Installable extension package |
 | `collada_support/blender_manifest.toml` | Extension metadata + `wheels` list |
 | `collada_support/__init__.py` | Operators and menus |
-| `collada_support/import_collada.py` | Import |
+| `collada_support/import_collada.py` | Import (general / SketchUp profile) |
+| `collada_support/import_cabinet_vision.py` | Import (Cabinet Vision profile) |
 | `collada_support/export_collada.py` | Export |
 | `collada_support/wheels/` | Unmodified PyPI `.whl` files |
+| `tests/` | Headless Blender checks + synthetic sample generator |
 | `dist/` | Local build of the install zip (gitignored) |
 | `submission/` | Extensions Platform listing assets |
 
@@ -66,6 +68,34 @@ Verify entries look like:
 - License for Extensions must remain **`SPDX:GPL-3.0-or-later`**.
 - Keep `version` in `blender_manifest.toml` and `bl_info["version"]` in sync.
 
+## Headless tests
+
+From the repo root:
+
+```bash
+blender --background --factory-startup --python tests/run_headless_tests.py
+```
+
+The run exits non-zero on failure, so it works as a pre-commit / CI gate. It
+covers operator registration, manifest ↔ `bl_info` version agreement, both
+import profiles, and the Cabinet Vision options (join, merge by distance,
+hidden feature routing, hole tessellation, library-node instancing, legacy
+non-finite floats, `.zae` archives, a 1000-part stress import).
+
+Samples are synthesized into `tests/_samples` (gitignored) by
+`tests/make_cv_samples.py` — no binary fixtures are committed. To smoke-test
+real exports instead, pass a directory holding them; checks whose sample file
+is absent are reported as skipped rather than failing:
+
+```bash
+blender --background --factory-startup \
+    --python tests/run_headless_tests.py -- /path/to/cv_exports
+```
+
+The general-profile checks need pycollada. When it is not already importable,
+the harness unpacks `collada_support/wheels/` into a temp directory for the
+test run only — the extension itself never touches `sys.path`.
+
 ## Validation / testing checklist
 
 - [ ] Manifest parses; version matches `bl_info`
@@ -75,6 +105,7 @@ Verify entries look like:
 - [ ] Export `.dae` and optionally `.zae`
 - [ ] Import **Parenting** mode preserves useful hierarchy on a group-heavy file (e.g. SketchUp)
 - [ ] Import **Multiply** still places geometry correctly
+- [ ] Import **Profile → Cabinet Vision** on a CV export: parts joined, bores present, assembly collections named
 - [ ] Malformed / empty geometry does not crash Blender (check System Console)
 - [ ] Watch Window → Toggle System Console for errors during I/O
 
