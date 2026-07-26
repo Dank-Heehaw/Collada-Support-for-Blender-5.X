@@ -2,6 +2,23 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.3.0] — 2026-07-26
+
+Cabinet Vision (CV) COLLADA import support.
+
+- **New import profile:** the COLLADA import operator has a **Profile** option — **General** (default, unchanged behavior) or **Cabinet Vision**. CV logic lives in `collada_support/import_cabinet_vision.py`; `import_collada.py` still serves the general / SketchUp path.
+- **Library node instances:** `<library_nodes>` + `<instance_node>` are resolved, so CV files that define a part once and instance it across assemblies import at all (recursion-guarded, one parse per library node).
+- **Polygons with holes:** `<polygons>` / `<ph>` / `<h>` contours are tessellated (outer + holes), so hardware bores and routed cutouts exist in the mesh. Also added to the **general** importer, where it only engages when `<ph>` elements are present — pre-triangulated exports such as SketchUp are unaffected.
+- **Joined parts:** each panel's faces, edgebanding and boring/dado are assembled directly into one mesh object, with seam vertices welded (Merge Vertices by Distance).
+- **Assembly-aware collections:** parts are grouped under their cabinet / countertop / molding run using CV's own label; stacked redundant wrapper levels reuse one collection instead of fragmenting into `.001`, `.002`, …. Unabsorbed bore sub-types share one **Bores** collection per assembly.
+- **Hardware-aware bores:** bores exported as flat or `PA_`-wrapped siblings are absorbed into the one structural panel they belong to (never into hinge hardware), with the bore's UV parameterization rotated to match the panel.
+- **Hidden feature geometry:** DADO/NOTCH geometry is routed to a hidden per-import **CV Hidden Features** collection; BORE geometry always stays merged and visible.
+- **CV import options:** Join Parts, Merge Vertices by Distance (+ Distance), Hide Dado/Notch Feature Geometry, Fix Hidden Dado/Notch Faces, Clean Topology, Mark Hard Edges as Seams, Flip UV (V Axis).
+- **Legacy exports:** non-finite floats written by old Microsoft C runtimes (`-1.#IND`, `1.#QNAN`, truncated `-1.#J`, …) are coerced to `0.0` and reported instead of aborting the import.
+- **Performance:** each geometry is decoded once and cached, meshes are assembled directly (no temporary objects + Join operator), and UVs / material indices / transforms are written in bulk via `foreach_set` and NumPy where available.
+- The Cabinet Vision profile parses COLLADA XML directly, so it also works when the bundled pycollada wheels fail to load.
+- **Credit:** the CV profile is derived from [Cabinet-Vision-to-Blender](https://github.com/ihartred-cpu/Cabinet-Vision-to-Blender) by **ihartred-cpu**, reused under the MIT license (see `THIRD_PARTY_LICENSES.md`).
+
 ## [1.2.1] — 2026-07-18
 
 Import UX for large SketchUp / Warehouse files.
@@ -95,6 +112,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[1.3.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.3.0
 [1.2.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.1
 [1.2.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.0
 [1.1.3]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.3

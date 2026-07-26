@@ -14,6 +14,7 @@ Use this add-on when you need to open or save `.dae` files (and related archives
 - **Archive formats**: `.zae` (official COLLADA zip), `.kmz` (Earth/Warehouse-style), and generic `.zip` containing a `.dae`
 - **COLLADA versions** on export: 1.4.1 or 1.5.0
 - Import **Parenting** mode recreates SketchUp-style groups as Empties (default)
+- **Cabinet Vision profile** on import: library node instancing, polygons with holes (hardware bores / routed cutouts), panels joined per part, assembly-aware collections
 - SketchUp and common transform quirks handled where practical
 - Import hardening inspired by Blender 4.5’s native importer patterns (safer mesh validation, fewer crashes on bad data)
 
@@ -47,6 +48,7 @@ This extension ships **pycollada** (and its small dependencies) as wheels inside
 
 - No skin / armature / animation import or export yet (not full OpenCOLLADA parity)
 - No morph / shape-key I/O yet
+- Cabinet Vision support is import-only
 - No custom split-normals / vertex-color parity with the old native importer
 - Very large scenes remain CPU-bound during XML parse
 - Nested ZAE sub-archives are not supported
@@ -60,6 +62,8 @@ Built on the pycollada Blender lineage:
 - Upstream library: [pycollada](https://github.com/pycollada/pycollada)
 - Import hardening lessons from Blender 4.5’s native COLLADA importer patterns and related community work
 
+Cabinet Vision import profile derived from [Cabinet-Vision-to-Blender](https://github.com/ihartred-cpu/Cabinet-Vision-to-Blender) by **ihartred-cpu**, used under the MIT license.
+
 ## License
 
-**GPL-3.0-or-later**
+**GPL-3.0-or-later** (Cabinet Vision profile portions: MIT — see `THIRD_PARTY_LICENSES.md`)

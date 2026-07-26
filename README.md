@@ -44,7 +44,30 @@ Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada
 | **`.kmz`** | Earth / Warehouse-style zip with embedded `.dae` + textures |
 | **`.zip`** | Any zip that contains at least one `.dae` |
 
-Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, and SketchUp-oriented quirks where possible.
+Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, and SketchUp-oriented quirks where possible. Polygons with holes (`<polygons>` / `<ph>` / `<h>`) are tessellated so drilled or routed cutouts survive.
+
+### Import profiles (1.3.0+)
+
+The import file browser has a **Profile** option:
+
+| Profile | Use for |
+| --- | --- |
+| **General** (default) | SketchUp, Warehouse, DCC and game-pipeline exports — unchanged 1.2.x behavior |
+| **Cabinet Vision** | Cabinet Vision `.dae` exports |
+
+**Cabinet Vision** covers what CV actually emits and generic importers skip:
+
+- **`<library_nodes>` + `<instance_node>`** — a part defined once and instanced across assemblies (without this, generic importers find no geometry in the visual scene and produce nothing)
+- **`<polygons>` / `<ph>` / `<h>`** — panel faces with hardware bores and routed cutouts
+- **Joined parts** — each panel's faces, edgebanding and boring/dado become one selectable object, seams welded
+- **Assembly-aware collections** — parts grouped under their cabinet / countertop / molding run from CV's own label; redundant stacked wrapper levels reuse one collection; unabsorbed bores share a **Bores** collection per assembly
+- **Hardware-aware bores** — bores exported as siblings are absorbed into the structural panel they belong to (never into hinge hardware), with bore UVs rotated onto the panel
+- **Hidden feature geometry** — DADO/NOTCH geometry goes to a hidden **CV Hidden Features** collection; BORE geometry stays merged and visible
+- **Legacy exports** — non-finite floats from old Microsoft C runtimes (`-1.#IND`, `1.#QNAN`, `-1.#J`, …) are coerced to `0.0` and reported rather than aborting the import
+
+Cabinet Vision options: **Join Parts**, **Merge Vertices by Distance** (+ **Distance**), **Hide Dado/Notch Feature Geometry**, **Fix Hidden Dado/Notch Faces**, **Clean Topology**, **Mark Hard Edges as Seams**, **Flip UV (V Axis)**.
+
+The Cabinet Vision profile reads COLLADA XML directly instead of going through pycollada, so it also works if the bundled wheels fail to load.
 
 ### Export
 
@@ -65,7 +88,7 @@ In the import file browser, **Transformations**:
 | **Multiply** | Flattens hierarchy: applies node transforms as world matrices (long mesh list) |
 | **Apply** | Bakes transforms into mesh data |
 
-If you still see a flat list of `ID*` meshes, make sure **Transformations → Parenting** is selected (default from **1.0.5**).
+If you still see a flat list of `ID*` meshes, make sure **Transformations → Parenting** is selected (default from **1.0.5**). Transform modes apply to the **General** profile; the Cabinet Vision profile always bakes CV's node transforms into each part's mesh.
 
 ## Bundled pycollada
 
@@ -96,6 +119,8 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 - Hierarchy under **Multiply** is intentionally flat; use **Parenting** (default) for SketchUp-style groups
 - Parenting still creates Empties for named groups / non-identity transforms; only identity unnamed single-child wrappers are collapsed (1.2.1+)
 - Large-file XML parse can still freeze the UI briefly before the import progress bar advances
+- Cabinet Vision profile is import-only (there is no CV-flavored export), and does not import CV cameras or reconstruct parametric data — it produces panel meshes, materials and collections
+- Cabinet Vision hierarchy is expressed as collections, not parented Empties; **Transformations** does not apply to that profile
 
 ## Troubleshooting
 
@@ -106,9 +131,9 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **1.2.1**)
+- Add-on version (currently **1.3.0**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
-- Import **Transformations** mode if relevant
+- Import **Profile** (General / Cabinet Vision) and **Transformations** mode if relevant
 - Full console output
 - Expected vs actual result
 - A **small reproducible sample** file if you can share one (or a link)
@@ -122,6 +147,7 @@ submission/                # Blender Extensions Platform listing materials
 CONTRIBUTING.md            # developer workflow
 CHANGELOG.md               # release history
 ROADMAP.md                 # staged OpenCOLLADA parity plan
+THIRD_PARTY_LICENSES.md    # licenses of incorporated third-party code
 ```
 
 ## Credits
@@ -129,8 +155,9 @@ ROADMAP.md                 # staged OpenCOLLADA parity plan
 - [blender_pycollada_importexport](https://github.com/ldo/blender_pycollada_importexport) — Tim Knip, Dusan Maliarik, Lawrence D’Oliveiro, and contributors  
 - [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport) — Kims Ferdy  
 - [pycollada](https://github.com/pycollada/pycollada)  
+- [Cabinet-Vision-to-Blender](https://github.com/ihartred-cpu/Cabinet-Vision-to-Blender) — **ihartred-cpu**; the Cabinet Vision import profile (`collada_support/import_cabinet_vision.py`) is derived from that project and reused under the **MIT** license (see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md))  
 - Blender 4.5 native COLLADA importer patterns (behavioral reference)
 
 ## License
 
-**GPL-3.0-or-later**
+**GPL-3.0-or-later**, except where noted in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
