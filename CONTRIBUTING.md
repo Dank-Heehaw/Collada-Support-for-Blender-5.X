@@ -65,6 +65,7 @@ Verify entries look like:
 - Every wheel under `wheels/` must be listed in `blender_manifest.toml` under `wheels = [...]` with forward-slash paths.
 - License for Extensions must remain **`SPDX:GPL-3.0-or-later`**.
 - Keep `version` in `blender_manifest.toml` and `bl_info["version"]` in sync.
+- Do **not** manipulate `sys.path` or `sys.modules` (insert, remove, reorder, or delete entries). The Extensions Platform rejects that. Let Blender load wheels from `blender_manifest.toml`.
 
 ## Validation / testing checklist
 

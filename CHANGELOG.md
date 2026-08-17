@@ -2,6 +2,12 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [1.2.2] — 2026-08-16
+
+Blender Extensions Platform: no runtime `sys.path` / `sys.modules` changes.
+
+- Remove NumPy site-packages reordering and module-cache purging. Blender loads bundled wheels; pycollada is imported normally.
+
 ## [1.2.1] — 2026-07-18
 
 Import UX for large SketchUp / Warehouse files.
@@ -95,6 +101,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[1.2.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.2
 [1.2.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.1
 [1.2.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.0
 [1.1.3]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.1.3
