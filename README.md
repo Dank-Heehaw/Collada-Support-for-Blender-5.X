@@ -53,7 +53,7 @@ Import also covers triangle/polylist meshes, UVs, basic materials, textures (whe
 | **`.dae`** | COLLADA **1.4.1** or **1.5.0** |
 | **`.zae`** | Zip package; can include textures |
 
-Export covers meshes, Principled BSDF materials (Blender 5 socket names), object parenting, optional textures, and ZAE packaging.
+Export covers meshes, Principled BSDF materials (Blender 5 socket names), object parenting, optional textures, and ZAE packaging. Meshes are triangulated on export (Google Earth does not accept `<polylist>`). Transmission is written as a color opacity, not the diffuse texture.
 
 ### Import transform modes
 
