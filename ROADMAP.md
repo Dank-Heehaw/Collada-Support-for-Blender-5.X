@@ -12,7 +12,7 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
 | **1.5.0** | Armature + skin **export** |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
-| **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite |
+| **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite (started: Google Earth / COLLADA 1.4.1 export, #5) |
 
 ### Export options deferred to **2.0**
 

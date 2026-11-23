@@ -2,6 +2,15 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.0] — unreleased
+
+Google Earth / COLLADA 1.4.1 export interoperability ([#5](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/5)).
+
+- **Transparent map:** do not reuse the diffuse texture as `<transparent>` when Transmission (or Alpha) is non-opaque. Google Earth samples alpha from that texture, so RGB maps without an alpha channel rendered fully invisible. Transmission still writes a color `<transparent>` plus `<transparency>`.
+- **Triangles:** triangulate the export copy of each mesh so Google Earth is not given `<polylist>` (unsupported primitive). The Blender mesh is unchanged.
+- **Lambert schema:** omit pycollada’s default `specular` / `shininess` (and other unset shader properties) so `<lambert>` validates against COLLADA 1.4.1.
+- **XML declaration:** write `<?xml version="1.0" encoding="utf-8"?>` so readers that sniff the first line (e.g. F3D) accept the file.
+
 ## [1.2.2] — 2026-08-16
 
 Blender Extensions Platform: no runtime `sys.path` / `sys.modules` changes.
@@ -101,6 +110,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[2.0.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/5
 [1.2.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.2
 [1.2.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.1
 [1.2.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.0

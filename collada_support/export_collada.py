@@ -25,6 +25,69 @@ from collada.xmlutil import etree as ElementTree
 
 DEG = math.pi / 180 # angle unit conversion factor
 
+XML_DECLARATION = b'<?xml version="1.0" encoding="utf-8"?>\n'
+  # pycollada Collada.write() emits the root element with no declaration.
+  # F3D and other readers that sniff the first line reject those files.
+
+# COLLADA 1.4.1 profile_COMMON: children allowed inside each shader.
+# pycollada Effect.__init__ fills specular/shininess/transparent/etc. with
+# defaults and Effect.save() writes every non-None Effect.supported property
+# into whichever shader was chosen, so <lambert> fails schema validation.
+PROFILE_COMMON_SHADER_PROPS = \
+    {
+        "constant" : frozenset
+          ((
+            "emission", "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "lambert" : frozenset
+          ((
+            "emission", "ambient", "diffuse",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "phong" : frozenset
+          ((
+            "emission", "ambient", "diffuse", "specular", "shininess",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "blinn" : frozenset
+          ((
+            "emission", "ambient", "diffuse", "specular", "shininess",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+    }
+
+def ensure_xml_declaration(data) :
+    "Prefix an XML declaration when pycollada omitted it."
+    if isinstance(data, str) :
+        data = data.encode("utf-8")
+    #end if
+    if data.lstrip().startswith(b"<?xml") :
+        return data
+    #end if
+    return XML_DECLARATION + data
+#end ensure_xml_declaration
+
+def sanitize_effect(effect, shader, explicit_props) :
+    "Drop pycollada defaults and properties illegal for this shader so they are not written."
+    allowed = PROFILE_COMMON_SHADER_PROPS.get(shader)
+    if allowed is None :
+        allowed = frozenset(Effect.supported)
+    #end if
+    explicit = set(explicit_props)
+    for prop in Effect.supported :
+        if prop not in allowed or prop not in explicit :
+            setattr(effect, prop, None)
+        #end if
+    #end for
+#end sanitize_effect
+
+OPAQUE_WHITE = (1.0, 1.0, 1.0, 1.0)
+  # A_ONE <transparent> color: opacity comes from <transparency>, not a texture.
+
 XML_NCNAMESTART_CHARS = \
     r"\u0041-\u005A\u005F\u0061-\u007A\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF" \
     r"\u0370-\u037D\u037F-\u1FFF\u200C\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF" \
@@ -316,13 +379,18 @@ class ColladaExport :
         return out_filename
     #end write_ext_file
 
+    def collada_bytes(self) :
+        buf = io.BytesIO()
+        self._collada.write(buf)
+        return ensure_xml_declaration(buf.getvalue())
+    #end collada_bytes
+
     def save(self) :
         try :
+            dae_bytes = self.collada_bytes()
             if self._is_zae :
                 item = self._zipattr.new_item(self._zipattr.scene_name)
-                dae = io.BytesIO()
-                self._collada.write(dae)
-                self._zip.writestr(item, dae.getvalue())
+                self._zip.writestr(item, dae_bytes)
                 manifest = ElementTree.Element("dae_root")
                 manifest.text = self._zipattr.scene_name
                 item = self._zipattr.new_item("manifest.xml")
@@ -330,7 +398,9 @@ class ColladaExport :
                 self._zip.close()
                 self._zip = None
             else :
-                self._collada.write(self._temp_filepath)
+                out = open(self._temp_filepath, "wb")
+                out.write(dae_bytes)
+                out.close()
             #end if
             os.replace(self._temp_filepath, self._filepath)
         except Exception :
@@ -656,6 +726,11 @@ class ColladaExport :
         geom = self._geometries.get(b_mesh_name, None)
         if not geom :
             b_mesh.from_mesh(b_obj.data)
+            # Google Earth skips <polylist> ("unsupported COLLADA primitive").
+            # Triangulate the export copy only; the Blender mesh is unchanged.
+            if b_mesh.faces :
+                bmesh.ops.triangulate(b_mesh, faces = list(b_mesh.faces))
+            #end if
             geom = encode_mesh(b_mesh, b_mesh_name, b_material_slots)
             self._geometries[b_mesh_name] = geom
         #end if
@@ -738,6 +813,7 @@ class ColladaExport :
         effect_params = []
         if b_mat.diffuse_color[3] != 1.0 :
             effect_kwargs["transparency"] = b_mat.diffuse_color[3]
+            effect_kwargs["transparent"] = OPAQUE_WHITE
         #end if
         if b_mat.use_nodes :
             b_shader = list(n for n in b_mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -827,12 +903,16 @@ class ColladaExport :
                 value = get_input("Alpha")
                 if value != None and value != 1.0 :
                     effect_kwargs["transparency"] = value
+                    effect_kwargs["transparent"] = OPAQUE_WHITE
                       # overridden by Transmission (below) if any
                 #end if
                 value = get_input(("Transmission Weight", "Transmission"))
                 if value != None and value != 0 :
                     effect_kwargs["transparency"] = value
-                    effect_kwargs["transparent"] = effect_kwargs["diffuse"]
+                    # Never reuse the diffuse map as <transparent>. Google Earth
+                    # samples alpha from that texture; RGB images with no alpha
+                    # channel render fully invisible. A_ONE color + float is enough.
+                    effect_kwargs["transparent"] = OPAQUE_WHITE
                     value = get_input("IOR")
                     if value != None :
                         effect_kwargs["index_of_refraction"] = value
@@ -862,7 +942,9 @@ class ColladaExport :
                 #end if
             #end if
         #end if
+        explicit_props = [k for k in effect_kwargs if k in Effect.supported]
         effect = Effect(self.next_internal_id(), effect_params, shader, **effect_kwargs)
+        sanitize_effect(effect, shader, explicit_props)
         mat = Material(DATABLOCK.MATERIAL.nameid(b_mat.name), b_mat.name, effect)
         self._collada.effects.append(effect)
         self._collada.materials.append(mat)
