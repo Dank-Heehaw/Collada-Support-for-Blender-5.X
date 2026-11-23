@@ -2,6 +2,13 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.0] — unreleased
+
+Import of skinned COLLADA files that previously produced only joint Empties.
+
+- **[#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) — instance_controller meshes were skipped.** Scene walking only instantiated `instance_geometry` (plus cameras/lights). Game/DCC files that reference every mesh through `<instance_controller>` / `<skin>` therefore imported as a joint hierarchy of Empties and no mesh. Import now resolves skin and morph controllers to their source geometry and creates the bind-pose mesh in Parenting, Multiply, and Apply modes.
+- **Bind-pose armature:** `type="JOINT"` nodes are converted to a Blender Armature, vertex groups are filled from `<vertex_weights>`, and an Armature modifier is added. Placeholder joint Empties are removed after the bones exist. Animation channels are still not imported.
+
 ## [1.2.2] — 2026-08-16
 
 Blender Extensions Platform: no runtime `sys.path` / `sys.modules` changes.

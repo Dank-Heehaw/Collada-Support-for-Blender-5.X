@@ -44,7 +44,7 @@ Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada
 | **`.kmz`** | Earth / Warehouse-style zip with embedded `.dae` + textures |
 | **`.zip`** | Any zip that contains at least one `.dae` |
 
-Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, and SketchUp-oriented quirks where possible.
+Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, **skinned `instance_controller` meshes** (bind-pose mesh + Armature/weights from `JOINT` nodes), and SketchUp-oriented quirks where possible.
 
 ### Export
 
@@ -87,7 +87,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 **Still pending:**
 
 - Native OpenCOLLADA-style **export** Main options (Include Children/Armatures/Shape Keys, Global Orientation axes, Texture Copy / UV map) — planned **2.0**
-- No skin / armature / animation import or export yet (planned 1.4–1.7; see roadmap)
+- Skin **animation** and armature **export** are not implemented yet (bind-pose controller import + Armature/weights landed in **2.0.0**; see roadmap)
 - No morph / shape-key I/O yet (planned 1.3)
 - No full custom split-normals / vertex-color parity (planned 2.0 with export panels)
 - Very large files remain CPU-bound during XML parse (pycollada)

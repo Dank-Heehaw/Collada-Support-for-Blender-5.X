@@ -9,7 +9,7 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | **1.1.0–1.1.3** | Static correctness + Extensions compliance / package id `collada_support` |
 | **1.2.0–1.2.2** (current) | Working wheels-only release; leaner Parenting Empties + import progress (1.2.1); no `sys.path` / `sys.modules` changes (1.2.2) |
 | **1.3.0** | Morph / shape-key **import** (then export) |
-| **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
+| **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later). Bind-pose `instance_controller` mesh + JOINT Armature/weights also ships in **2.0.0** ([#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3)). |
 | **1.5.0** | Armature + skin **export** |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
 | **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite |
@@ -58,4 +58,4 @@ Design constraints:
 - Animation needs dedicated XML parsing (`pycollada` `Animation.load` does not build samplers/channels)
 - First rig slice (**1.4.0**): **import-only**, one controller, **PARENT** mode, LINEAR/STEP matrix channels
 
-Do not land armature/skin/morph/animation work until the corresponding release milestone above.
+Bind-pose skin **import** (controller geometry + JOINT Armature/weights, no animation) landed in **2.0.0** to fix [#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3). Morph I/O, skin **export**, and animation still wait on the milestones above.
