@@ -8,7 +8,6 @@ import tempfile
 import zipfile
 import numpy as np
 import bpy
-import bmesh
 from mathutils import Matrix, Vector
 
 from collada import Collada
@@ -227,38 +226,129 @@ def idurl(uid) :
     return "#" + uid
 #end idurl
 
-_BMESH_LOOKUP_SEQ_NAMES = ("verts", "edges", "faces")
+def _mesh_poly_loop_indices(poly) :
+    "Loop indices for a MeshPolygon (Blender Mesh, not BMesh)."
+    indices = getattr(poly, "loop_indices", None)
+    if indices is not None :
+        return indices
+    #end if
+    return range(poly.loop_start, poly.loop_start + poly.loop_total)
+#end _mesh_poly_loop_indices
 
-def _bmesh_seq_ensure_lookup(seq) :
-    "Call ensure_lookup_table only on verts/edges/faces. Never on BMLoopSeq."
-    if seq is None :
-        return
+def _mesh_face_is_smooth(mesh, poly) :
+    "True when the face uses vertex/corner normals (not a sharp/flat face)."
+    attr = getattr(mesh, "attributes", None)
+    if attr is not None :
+        sharp = attr.get("sharp_face")
+        if sharp is not None :
+            try :
+                return not bool(sharp.data[poly.index].value)
+            except (AttributeError, IndexError, TypeError) :
+                pass
+            #end try
+        #end if
     #end if
-    typename = type(seq).__name__
-    if "Loop" in typename :
-        return
+    if hasattr(poly, "use_smooth") :
+        return bool(poly.use_smooth)
     #end if
-    ensure = getattr(seq, "ensure_lookup_table", None)
-    if not callable(ensure) :
-        return
-    #end if
+    return True
+#end _mesh_face_is_smooth
+
+def _mesh_loop_normal(mesh, loop_index, vert_index) :
     try :
-        ensure()
-    except AttributeError :
+        corners = mesh.corner_normals
+        if corners is not None and loop_index < len(corners) :
+            vec = Vector(corners[loop_index].vector)
+            if vec.length_squared > 1e-16 :
+                return vec
+            #end if
+        #end if
+    except (AttributeError, IndexError, TypeError) :
         pass
     #end try
-#end _bmesh_seq_ensure_lookup
-
-def _bmesh_ensure_lookup_tables(bm) :
-    "Ensure bmesh index tables for verts/edges/faces only. BMLoopSeq in"
-    " Blender 5 has no ensure_lookup_table — never pass bm.loops or face.loops."
-    if bm is None :
-        return
+    loop = mesh.loops[loop_index]
+    if hasattr(loop, "normal") :
+        try :
+            vec = Vector(loop.normal)
+            if vec.length_squared > 1e-16 :
+                return vec
+            #end if
+        except (AttributeError, TypeError) :
+            pass
+        #end try
     #end if
-    for name in _BMESH_LOOKUP_SEQ_NAMES :
-        _bmesh_seq_ensure_lookup(getattr(bm, name, None))
+    return Vector(mesh.vertices[vert_index].normal)
+#end _mesh_loop_normal
+
+def _mesh_color_layers(mesh) :
+    "Corner or point color layers as (name, domain, data_seq)."
+    layers = []
+    attrs = getattr(mesh, "color_attributes", None)
+    if attrs :
+        for attr in attrs :
+            domain = getattr(attr, "domain", "CORNER")
+            if domain in ("CORNER", "POINT") :
+                layers.append((attr.name, domain, attr.data))
+            #end if
+        #end for
+        if layers :
+            return layers
+        #end if
+    #end if
+    vcols = getattr(mesh, "vertex_colors", None)
+    if vcols :
+        for vc in vcols :
+            layers.append((vc.name, "CORNER", vc.data))
+        #end for
+    #end if
+    return layers
+#end _mesh_color_layers
+
+def _color_components(item) :
+    col = getattr(item, "color", item)
+    r = float(col[0])
+    g = float(col[1])
+    b = float(col[2])
+    a = float(col[3]) if len(col) > 3 else 1.0
+    if r > 1.0 or g > 1.0 or b > 1.0 or a > 1.0 :
+        r, g, b, a = r / 255.0, g / 255.0, b / 255.0, a / 255.0
+    #end if
+    return r, g, b, a
+#end _color_components
+
+def _mesh_loose_edges(mesh) :
+    loose = []
+    has_flag = False
+    for edge in mesh.edges :
+        if hasattr(edge, "is_loose") :
+            has_flag = True
+            if edge.is_loose :
+                loose.append(edge)
+            #end if
+        #end if
     #end for
-#end _bmesh_ensure_lookup_tables
+    if has_flag :
+        return loose
+    #end if
+    used = set()
+    for poly in mesh.polygons :
+        verts = poly.vertices
+        n = len(verts)
+        for i in range(n) :
+            a = verts[i]
+            b = verts[(i + 1) % n]
+            used.add((a, b) if a < b else (b, a))
+        #end for
+    #end for
+    for edge in mesh.edges :
+        a, b = edge.vertices
+        key = (a, b) if a < b else (b, a)
+        if key not in used :
+            loose.append(edge)
+        #end if
+    #end for
+    return loose
+#end _mesh_loose_edges
 
 def translate_id(name) :
     "Native collada_internal::translate_id: XML id without a datablock prefix."
@@ -1020,16 +1110,38 @@ class ColladaExport :
         return True
     #end _will_export_skin
 
-    def _object_to_bmesh(self, b_obj) :
-        "Build a bmesh for export: modifiers, curve conversion, triangulate."
+    def _release_export_mesh(self, mesh_state) :
+        "Free a temporary evaluated Mesh from _object_to_mesh."
+        if mesh_state is None :
+            return
+        #end if
+        eval_obj, owned_mesh = mesh_state[1], mesh_state[2]
+        if eval_obj is not None :
+            try :
+                eval_obj.to_mesh_clear()
+            except Exception :
+                pass
+            #end try
+        #end if
+        if owned_mesh is not None :
+            try :
+                bpy.data.meshes.remove(owned_mesh)
+            except Exception :
+                pass
+            #end try
+        #end if
+    #end _release_export_mesh
+
+    def _object_to_mesh(self, b_obj) :
+        "Evaluated Mesh for export (modifiers, curve conversion). Never BMesh."
         will_skin = self._will_export_skin(b_obj)
         # Native bc_get_mesh_copy evaluates only when apply_modifiers is on.
         # Shape keys are extra morph geometries, not a baked mix.
         need_eval = b_obj.type != "MESH" or self._apply_modifiers
         muted = []
-        b_mesh = bmesh.new()
         src_mesh = None
-        created = False
+        eval_obj = None
+        owned_mesh = None
         try :
             if need_eval :
                 for mod in getattr(b_obj, "modifiers", []) :
@@ -1048,37 +1160,36 @@ class ColladaExport :
                 depsgraph = bpy.context.evaluated_depsgraph_get()
                 eval_obj = b_obj.evaluated_get(depsgraph)
                 try :
-                    src_mesh = bpy.data.meshes.new_from_object \
+                    src_mesh = eval_obj.to_mesh \
                       (
-                        eval_obj,
                         preserve_all_data_layers = True,
                         depsgraph = depsgraph,
                       )
-                    created = True
                 except Exception :
-                    src_mesh = getattr(b_obj, "data", None) if b_obj.type == "MESH" else None
-                    created = False
+                    src_mesh = None
                 #end try
+                if src_mesh is None :
+                    try :
+                        eval_obj.to_mesh_clear()
+                    except Exception :
+                        pass
+                    #end try
+                    eval_obj = None
+                    try :
+                        owned_mesh = bpy.data.meshes.new_from_object \
+                          (
+                            b_obj.evaluated_get(depsgraph),
+                            preserve_all_data_layers = True,
+                            depsgraph = depsgraph,
+                          )
+                        src_mesh = owned_mesh
+                    except Exception :
+                        src_mesh = getattr(b_obj, "data", None) if b_obj.type == "MESH" else None
+                        owned_mesh = None
+                    #end try
+                #end if
             elif b_obj.type == "MESH" :
                 src_mesh = b_obj.data
-            #end if
-            if src_mesh is None :
-                return b_mesh
-            #end if
-            b_mesh.from_mesh(src_mesh)
-            if self._triangulate and b_mesh.faces :
-                # Native bc_triangulate_mesh: QUAD_SHORTEDGE, beauty off.
-                try :
-                    bmesh.ops.triangulate \
-                      (
-                        b_mesh,
-                        faces = list(b_mesh.faces),
-                        quad_method = "SHORT_EDGE",
-                        ngon_method = "EAR_CLIP",
-                      )
-                except Exception :
-                    bmesh.ops.triangulate(b_mesh, faces = list(b_mesh.faces))
-                #end try
             #end if
         finally :
             for mod in muted :
@@ -1088,16 +1199,9 @@ class ColladaExport :
                     pass
                 #end try
             #end for
-            if created and src_mesh is not None :
-                try :
-                    bpy.data.meshes.remove(src_mesh)
-                except Exception :
-                    pass
-                #end try
-            #end if
         #end try
-        return b_mesh
-    #end _object_to_bmesh
+        return src_mesh, eval_obj, owned_mesh
+    #end _object_to_mesh
 
     def obj_mesh(self, b_obj) :
 
@@ -1126,14 +1230,16 @@ class ColladaExport :
             return idx
         #end unique_normal_index
 
-        def encode_mesh(b_mesh, geom_id, geom_name, b_material_slots) :
+        def encode_mesh(b_mesh, geom_id, geom_name, b_material_slots, positions = None) :
+            # Blender 5 BMLoopSeq has no ensure_lookup_table; do not use BMesh for COLLADA mesh export.
+            # Use evaluated Mesh (vertices/polygons/loops/uv_layers) like native GeometryExporter.
 
-            def is_trimesh(faces) :
-                return all([len(f.verts) == 3 for f in faces])
-            #end is_trimesh
-
-            def vert_co(v) :
-                co = Vector(v.co)
+            def vert_co(index) :
+                if positions is not None and index < len(positions) :
+                    co = Vector(positions[index])
+                else :
+                    co = Vector(b_mesh.vertices[index].co)
+                #end if
                 if self._apply_global_orientation :
                     co = self._orient @ co
                 #end if
@@ -1143,24 +1249,27 @@ class ColladaExport :
                 return co
             #end vert_co
 
-            def face_is_smooth(face) :
-                # Native GeometryExporter: sharp_face / !smooth means flat.
-                if hasattr(face, "smooth") :
-                    return bool(face.smooth)
+            def prim_corners(prim) :
+                loops = getattr(prim, "loops", None)
+                if loops is not None :
+                    return list(loops), list(prim.vertices)
                 #end if
-                return not bool(getattr(face, "hide", False))
-            #end face_is_smooth
+                loop_ids = list(_mesh_poly_loop_indices(prim))
+                vert_ids = [b_mesh.loops[li].vertex_index for li in loop_ids]
+                return loop_ids, vert_ids
+            #end prim_corners
 
         #begin encode_mesh
-            _bmesh_ensure_lookup_tables(b_mesh)
             sources = []
+            nverts = len(b_mesh.vertices)
+            nloops = len(b_mesh.loops)
             vert_srcid = source_id(geom_id, "POSITION")
             sources.append \
               (
                 FloatSource
                   (
                     id = vert_srcid,
-                    data = np.array([c for v in b_mesh.verts for c in vert_co(v)]),
+                    data = np.array([c for i in range(nverts) for c in vert_co(i)]),
                     components = ("X", "Y", "Z")
                   )
               )
@@ -1168,20 +1277,22 @@ class ColladaExport :
             # use different offsets so flat faces keep a face normal instead of
             # a single averaged vertex normal.
             norm_store = ({}, [])
-            loop_norm_idx = [0] * len(b_mesh.loops)
-            for face in b_mesh.faces :
-                if face_is_smooth(face) :
-                    for face_loop in face.loops :
-                        loop_norm_idx[face_loop.index] = unique_normal_index \
+            loop_norm_idx = [0] * nloops
+            for poly in b_mesh.polygons :
+                loop_ids = _mesh_poly_loop_indices(poly)
+                if _mesh_face_is_smooth(b_mesh, poly) :
+                    for li in loop_ids :
+                        vi = b_mesh.loops[li].vertex_index
+                        loop_norm_idx[li] = unique_normal_index \
                           (
                             norm_store,
-                            Vector(face_loop.vert.normal),
+                            _mesh_loop_normal(b_mesh, li, vi),
                           )
                     #end for
                 else :
-                    ni = unique_normal_index(norm_store, Vector(face.normal))
-                    for face_loop in face.loops :
-                        loop_norm_idx[face_loop.index] = ni
+                    ni = unique_normal_index(norm_store, Vector(poly.normal))
+                    for li in loop_ids :
+                        loop_norm_idx[li] = ni
                     #end for
                 #end if
             #end for
@@ -1199,25 +1310,21 @@ class ColladaExport :
                   )
               )
             uv_ids = []
-            uv_layers = list(b_mesh.loops.layers.uv.items())
-            if b_mesh.loops.layers.uv.active != None :
-                active_uv_name = b_mesh.loops.layers.uv.active.name
-            else :
-                active_uv_name = None
-            #end if
+            uv_layers = list(getattr(b_mesh, "uv_layers", []))
+            active_uv = getattr(b_mesh.uv_layers, "active", None) if uv_layers else None
+            active_uv_name = active_uv.name if active_uv is not None else None
             if self._active_uv_only and active_uv_name is not None :
-                uv_layers = [(n, layer) for n, layer in uv_layers if n == active_uv_name]
+                uv_layers = [layer for layer in uv_layers if layer.name == active_uv_name]
             #end if
-            nloops = len(b_mesh.loops)
-            for uv_i, (b_uvname, uvlayer) in enumerate(uv_layers) :
+            for uv_i, uvlayer in enumerate(uv_layers) :
                 extra = "" if self._active_uv_only else ("-%d" % uv_i)
                 uv_name = source_id(geom_id, "TEXCOORD", extra)
-                uv_ids.append((uv_name, b_uvname))
+                uv_ids.append((uv_name, uvlayer.name))
                 uv_data = [0.0] * (nloops * 2)
-                for loop in b_mesh.loops :
-                    uv = loop[uvlayer].uv
-                    uv_data[loop.index * 2] = float(uv[0])
-                    uv_data[loop.index * 2 + 1] = float(uv[1])
+                for i, luv in enumerate(uvlayer.data) :
+                    uv = luv.uv
+                    uv_data[i * 2] = float(uv[0])
+                    uv_data[i * 2 + 1] = float(uv[1])
                 #end for
                 sources.append \
                   (
@@ -1230,25 +1337,32 @@ class ColladaExport :
                   )
             #end for
             color_ids = []
-            color_layers = []
-            if hasattr(b_mesh.loops.layers, "float_color") :
-                color_layers.extend(b_mesh.loops.layers.float_color.items())
-            #end if
-            if hasattr(b_mesh.loops.layers, "color") :
-                color_layers.extend(b_mesh.loops.layers.color.items())
-            #end if
-            for b_colname, collayer in color_layers :
+            for b_colname, domain, coldata in _mesh_color_layers(b_mesh) :
                 col_id = source_id(geom_id, "COLOR", "-" + translate_id(b_colname))
                 color_ids.append((col_id, b_colname))
                 col_data = [0.0] * (nloops * 4)
-                for loop in b_mesh.loops :
-                    col = loop[collayer]
-                    base = loop.index * 4
-                    col_data[base] = float(col[0])
-                    col_data[base + 1] = float(col[1])
-                    col_data[base + 2] = float(col[2])
-                    col_data[base + 3] = float(col[3]) if len(col) > 3 else 1.0
-                #end for
+                if domain == "POINT" :
+                    for loop in b_mesh.loops :
+                        r, g, b, a = _color_components(coldata[loop.vertex_index])
+                        base = loop.index * 4
+                        col_data[base] = r
+                        col_data[base + 1] = g
+                        col_data[base + 2] = b
+                        col_data[base + 3] = a
+                    #end for
+                else :
+                    for i, item in enumerate(coldata) :
+                        if i >= nloops :
+                            break
+                        #end if
+                        r, g, b, a = _color_components(item)
+                        base = i * 4
+                        col_data[base] = r
+                        col_data[base + 1] = g
+                        col_data[base + 2] = b
+                        col_data[base + 3] = a
+                    #end for
+                #end if
                 sources.append \
                   (
                     FloatSource
@@ -1272,13 +1386,30 @@ class ColladaExport :
                 blendstuff.append(names)
             #end if
 
+            use_tris = bool(self._triangulate)
+            if use_tris :
+                try :
+                    b_mesh.calc_loop_triangles()
+                except Exception :
+                    pass
+                #end try
+            #end if
             for slotindex in range(max(len(b_material_slots), 1)) :
-                assigned = \
-                    [
-                        f
-                        for f in b_mesh.faces
-                        if f.material_index == slotindex
-                    ]
+                if use_tris :
+                    assigned = \
+                        [
+                            t
+                            for t in b_mesh.loop_triangles
+                            if t.material_index == slotindex
+                        ]
+                else :
+                    assigned = \
+                        [
+                            p
+                            for p in b_mesh.polygons
+                            if p.material_index == slotindex
+                        ]
+                #end if
                 if any(assigned) :
                     # Native: primitive material symbol is get_material_id(ma).
                     mat = None
@@ -1304,36 +1435,43 @@ class ColladaExport :
                     extra_uv = bool(uv_ids)
                     extra_color = bool(color_ids)
                     indices = []
-                    for face in assigned :
-                        for face_loop in face.loops :
-                            indices.append(face_loop.vert.index)
-                            indices.append(loop_norm_idx[face_loop.index])
+                    vcounts = []
+                    all_tris = True
+                    for prim in assigned :
+                        loop_ids, vert_ids = prim_corners(prim)
+                        if len(vert_ids) != 3 :
+                            all_tris = False
+                        #end if
+                        vcounts.append(len(vert_ids))
+                        for vi, li in zip(vert_ids, loop_ids) :
+                            indices.append(int(vi))
+                            indices.append(loop_norm_idx[li] if li < len(loop_norm_idx) else 0)
                             if extra_uv :
-                                indices.append(face_loop.index)
+                                indices.append(int(li))
                             #end if
                             if extra_color :
-                                indices.append(face_loop.index)
+                                indices.append(int(li))
                             #end if
                         #end for
                     #end for
                     indices = np.array(indices)
-                    if is_trimesh(assigned) :
+                    if all_tris :
                         p = geom.createTriangleSet(indices, ilist, symbol)
                     else :
-                        vcounts = [len(f.verts) for f in assigned]
                         p = geom.createPolylist(indices, vcounts, ilist, symbol)
                     #end if
                     geom.primitives.append(p)
                 #end if
             #end for
             # Native createLooseEdgeList: wire edges as <lines>.
-            loose = [e for e in b_mesh.edges if e.is_wire]
+            loose = _mesh_loose_edges(b_mesh)
             if loose :
                 line_ilist = InputList()
                 line_ilist.addInput(0, "VERTEX", idurl(vert_srcid))
                 line_idx = []
                 for edge in loose :
-                    line_idx.extend((edge.verts[1].index, edge.verts[0].index))
+                    a, b = edge.vertices
+                    line_idx.extend((int(b), int(a)))
                 #end for
                 try :
                     lines = geom.createLineSet(np.array(line_idx), line_ilist, "")
@@ -1354,8 +1492,14 @@ class ColladaExport :
         geom_key = geom_id
         geom = self._geometries.get(geom_key, None)
         b_mesh = None
+        mesh_state = None
         if not geom :
-            b_mesh = self._object_to_bmesh(b_obj)
+            b_mesh, eval_obj, owned_mesh = self._object_to_mesh(b_obj)
+            mesh_state = (b_mesh, eval_obj, owned_mesh)
+            if b_mesh is None :
+                self._release_export_mesh(mesh_state)
+                return []
+            #end if
             geom_name = b_mesh_name if self._use_object_instantiation else b_obj.name
             geom = encode_mesh(b_mesh, geom_id, geom_name, b_material_slots)
             self._geometries[geom_key] = geom
@@ -1371,18 +1515,16 @@ class ColladaExport :
                         morph_weights.append(float(kb.value))
                         continue
                     #end if
-                    try :
-                        morph_bm = b_mesh.copy()
-                    except Exception :
-                        continue
-                    #end try
-                    _bmesh_ensure_lookup_tables(morph_bm)
-                    n = min(len(morph_bm.verts), len(kb.data))
-                    for i in range(n) :
-                        morph_bm.verts[i].co = kb.data[i].co
-                    #end for
-                    encode_mesh(morph_bm, morph_id, kb.name, b_material_slots)
-                    morph_bm.free()
+                    n = min(len(b_mesh.vertices), len(kb.data))
+                    morph_pos = [Vector(kb.data[i].co) for i in range(n)]
+                    if n < len(b_mesh.vertices) :
+                        morph_pos.extend \
+                          (
+                            Vector(b_mesh.vertices[i].co)
+                            for i in range(n, len(b_mesh.vertices))
+                          )
+                    #end if
+                    encode_mesh(b_mesh, morph_id, kb.name, b_material_slots, positions = morph_pos)
                     self._geometries[morph_id] = True
                     morph_ids.append(morph_id)
                     morph_weights.append(float(kb.value))
@@ -1426,13 +1568,14 @@ class ColladaExport :
         skin = None
         if self._will_export_skin(b_obj) :
             if b_mesh is None :
-                b_mesh = self._object_to_bmesh(b_obj)
+                b_mesh, eval_obj, owned_mesh = self._object_to_mesh(b_obj)
+                mesh_state = (b_mesh, eval_obj, owned_mesh)
             #end if
-            skin = self._make_skin_controller(b_obj, geom, b_mesh)
+            if b_mesh is not None :
+                skin = self._make_skin_controller(b_obj, geom, b_mesh)
+            #end if
         #end if
-        if b_mesh is not None :
-            b_mesh.free()
-        #end if
+        self._release_export_mesh(mesh_state)
         if skin is not None :
             cnode = ControllerNode(skin, matnodes)
             arm = _armature_object(b_obj)
@@ -1536,16 +1679,15 @@ class ColladaExport :
             #end if
             inv_binds.extend(_dae_matrix_floats(inv, prec).split())
         #end for
-        _bmesh_ensure_lookup_tables(b_mesh)
-        nverts = len(b_mesh.verts)
+        nverts = len(b_mesh.vertices)
         if nverts == 0 :
             return None
         #end if
         vcounts = []
         v_indices = []
         weights = []
-        # Map Blender vertex index → bmesh vert order (same as position source).
-        for vert in b_mesh.verts :
+        # Vertex order matches the Mesh position source (same indices as mesh.vertices).
+        for vert in b_mesh.vertices :
             influences = []
             for group in b_obj.vertex_groups :
                 jidx = name_to_index.get(group.name)

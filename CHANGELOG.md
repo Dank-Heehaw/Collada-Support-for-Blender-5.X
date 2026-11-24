@@ -2,6 +2,12 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.3] — 2026-11-23
+
+Rewrite mesh export on Blender **Mesh** API (`obj.to_mesh` / evaluated mesh, `vertices`, `polygons`, `loops`, `uv_layers`, `color_attributes`, `loop_triangles`). Remove BMesh from the exporter entirely; fixes the persistent BMLoopSeq crash on Blender 5.
+
+**Install:** remove the old add-on, **quit Blender fully**, then **Install from Disk** `dist/blender_collada_support.zip` (2.0.3). Confirm Preferences shows **2.0.3**. Reloading over a previous zip can leave old 2.0.0–2.0.2 exporter code loaded.
+
 ## [2.0.2] — 2026-11-23
 
 Single installable release that combines skin import, export fidelity, Blender 4.5 operator alignment, a harder Blender 5 export crash fix, and an FBX-style export UI.

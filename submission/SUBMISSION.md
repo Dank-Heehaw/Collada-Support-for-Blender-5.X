@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `2.0.2` |
+| Version | `2.0.3` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.2.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.3.md`
 
 ---
 
@@ -151,17 +151,18 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (2.0.2)
+## Quick paste — Release notes (2.0.3)
 
 ```markdown
-# Collada Support 2.0.2
+# Collada Support 2.0.3
 
 ## Changes
 
-- **Crash fix:** Blender 5 export no longer calls `ensure_lookup_table` on bmesh loops (`BMLoopSeq` has no such method). Lookup tables are ensured only on verts/edges/faces when that API exists and is callable. **Remove the old add-on first**, then Install from Disk — overwriting a previous zip can leave 2.0.0/2.0.1 code loaded.
-- **Export UI:** File Browser options use FBX-style collapsible sections (Include, Transform, Geometry, Armature, Animation, Extra) instead of cramped Main/Geom/Arm/Anim/Extra tabs.
-- **Skin import (#3):** `<instance_controller>` / `<skin>` meshes import as bind-pose geometry plus an Armature and weights.
-- **Export fidelity + original Blender 4.5 COLLADA alignment:** native operator options/defaults, IDs, skins, morph targets, XML declaration, A_ONE transparency (Google Earth), triangulate.
+- **Mesh export rewritten** on Blender’s Mesh API (`obj.to_mesh` / evaluated mesh, `vertices`, `polygons`, `loops`, `uv_layers`, `color_attributes`, `loop_triangles`). BMesh is no longer used for COLLADA mesh export.
+- **Crash fix:** persistent BMLoopSeq crash on Blender 5 is gone because the exporter never builds or indexes BMesh loops.
+- Named nodes, materials, texture copy, skins/controllers, morphs, and the FBX-style Include/Transform/Geometry/Armature/Animation options are unchanged — rebuilt on Mesh data.
+
+**Install:** remove the old add-on, quit Blender fully, then **Install from Disk** `blender_collada_support.zip`. Confirm Preferences shows **2.0.3**. Overwriting a previous zip in place can leave 2.0.0–2.0.2 code loaded.
 
 Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
@@ -174,7 +175,8 @@ Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → D
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_2.0.2.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.3.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_2.0.1.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_2.0.0.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.2.md     ← earlier notes (kept for reference)

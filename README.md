@@ -84,7 +84,9 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 
 **Fixed in 1.1.0 (static correctness):** multi-material export indices, empty material slots, selection-only export with unselected parents, atomic DAE/ZAE write, ortho camera scale, scene unit export, and surfaced pycollada parse warnings.
 
-**2.0.2:** Blender 5 export no longer calls `BMLoopSeq.ensure_lookup_table`; FBX-style collapsible export/import panels; skin **import** from `instance_controller`; native 4.5 operator names/defaults; native-style IDs, skins, morph targets, and texture copy.
+**2.0.3:** Mesh export rewritten on Blender Mesh API (no BMesh). Fixes the persistent BMLoopSeq crash on Blender 5. Remove the old add-on, quit Blender fully, then Install from Disk **2.0.3**.
+
+**2.0.2:** FBX-style collapsible export/import panels; skin **import** from `instance_controller`; native 4.5 operator names/defaults; native-style IDs, skins, morph targets, and texture copy.
 
 **Still pending:**
 
