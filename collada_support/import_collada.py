@@ -20,7 +20,10 @@ from collada.light import AmbientLight, DirectionalLight, PointLight, SpotLight
 from collada.material import Map
 from collada.polylist import Polylist, BoundPolylist
 from collada.primitive import BoundPrimitive
-from collada.scene import Scene, Node, NodeNode, CameraNode, GeometryNode, LightNode
+from collada.controller import BoundMorph, BoundSkin, Morph, Skin
+from collada.scene import (
+    Scene, Node, NodeNode, CameraNode, ControllerNode, GeometryNode, LightNode,
+)
 from collada.triangleset import TriangleSet, BoundTriangleSet
 from collada.xmlutil import etree as ElementTree
 
@@ -35,11 +38,12 @@ DEG = math.pi / 180 # angle unit conversion factor
 
 # Match Blender 4.5 MeshImporter::is_nice_mesh: reject/skip bad topology
 # instead of feeding invalid loops into from_pydata (common crash source).
-def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = None, uvcoords = None) :
+def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = None, uvcoords = None, colorcoords = None) :
     clean_faces = []
     clean_smooth = []
     clean_mats = []
     clean_uvs = None if uvcoords is None else [[] for _ in uvcoords]
+    clean_colors = None if colorcoords is None else [[] for _ in colorcoords]
     rejected = 0
     for i, face in enumerate(faces) :
         if face is None :
@@ -87,8 +91,24 @@ def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = N
                 #end if
             #end for
         #end if
+        if clean_colors is not None :
+            for layer_i, layer in enumerate(colorcoords) :
+                blank = [(1.0, 1.0, 1.0, 1.0)] * len(idxs)
+                if i < len(layer) :
+                    coords = layer[i]
+                    if len(coords) >= len(idxs) :
+                        clean_colors[layer_i].append([tuple(coords[j]) for j in range(len(idxs))])
+                    else :
+                        pad = list(coords) + blank[len(coords):]
+                        clean_colors[layer_i].append([tuple(c) for c in pad])
+                    #end if
+                else :
+                    clean_colors[layer_i].append(blank)
+                #end if
+            #end for
+        #end if
     #end for
-    return clean_faces, clean_smooth, clean_mats, clean_uvs, rejected
+    return clean_faces, clean_smooth, clean_mats, clean_uvs, clean_colors, rejected
 #end _sanitize_faces
 
 def _face_index_list(prim) :
@@ -166,6 +186,7 @@ def set_material_transparency(b_mat, alpha) :
 #end set_material_transparency
 
 class DATABLOCK :
+    ARMATURE = "ARMATURE"
     CAMERA = "CAMERA"
     EMPTY = "EMPTY"
     LAMP = "LAMP"
@@ -173,6 +194,10 @@ class DATABLOCK :
     MESH = "MESH"
     SCENE = "SCENE"
 #end DATABLOCK
+
+# Scene-graph instance types that become Blender objects (not group Empties).
+# ControllerNode was previously skipped, which dropped every skinned mesh.
+_INSTANCE_NODES = (CameraNode, ControllerNode, GeometryNode, LightNode)
 
 def unurlid(uid) :
     assert uid.startswith("#")
@@ -246,6 +271,160 @@ def _node_has_meaningful_name(src) :
 def _node_src(node) :
     return node.node if isinstance(node, NodeNode) else node
 #end _node_src
+
+def _node_is_joint(src) :
+    "True when a COLLADA <node> is a JOINT (skin skeleton bone)."
+    xml = getattr(src, "xmlnode", None)
+    if xml is None :
+        return False
+    #end if
+    return (xml.get("type") or "").upper() == "JOINT"
+#end _node_is_joint
+
+def _joint_key(src) :
+    "Preferred skin-joint identifier: sid, then id, then name."
+    xml = getattr(src, "xmlnode", None)
+    if xml is None :
+        return getattr(src, "id", None)
+    #end if
+    return xml.get("sid") or xml.get("id") or xml.get("name")
+#end _joint_key
+
+def _xml_skeleton_id(xmlnode) :
+    "Read <skeleton>#JointId</skeleton> from an instance_controller, if present."
+    if xmlnode is None :
+        return None
+    #end if
+    skel = xmlnode.find(tag("skeleton"))
+    if skel is None or not (skel.text or "").strip() :
+        return None
+    #end if
+    return (skel.text or "").strip().lstrip("#")
+#end _xml_skeleton_id
+
+def _float_weight(value) :
+    "pycollada weight sources yield scalars or 1-element arrays."
+    try :
+        return float(value)
+    except (TypeError, ValueError) :
+        pass
+    #end try
+    try :
+        return float(value[0])
+    except Exception :
+        return 0.0
+    #end try
+#end _float_weight
+
+def _bound_geometry_from_controller(bctl) :
+    "Resolve a bound/unbound skin or morph controller to BoundGeometry."
+    if isinstance(bctl, BoundSkin) :
+        return getattr(bctl, "geometry", None)
+    #end if
+    if isinstance(bctl, BoundMorph) :
+        morph = getattr(bctl, "original", None)
+        src_geom = getattr(morph, "source_geometry", None)
+        if src_geom is None :
+            return None
+        #end if
+        matrix = getattr(bctl, "matrix", None)
+        materials = getattr(bctl, "materialnodebysymbol", None) or {}
+        try :
+            return src_geom.bind(matrix, materials)
+        except Exception :
+            return None
+        #end try
+    #end if
+    if isinstance(bctl, Skin) :
+        geom = getattr(bctl, "geometry", None)
+        if geom is None :
+            return None
+        #end if
+        try :
+            return geom.bind(bctl.bind_shape_matrix, {})
+        except Exception :
+            return None
+        #end try
+    #end if
+    if isinstance(bctl, Morph) :
+        src_geom = getattr(bctl, "source_geometry", None)
+        if src_geom is None :
+            return None
+        #end if
+        try :
+            identity = np.identity(4) if np is not None else \
+                ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))
+            return src_geom.bind(identity, {})
+        except Exception :
+            return None
+        #end try
+    #end if
+    return getattr(bctl, "geometry", None)
+#end _bound_geometry_from_controller
+
+def _controller_skin(bctl) :
+    if isinstance(bctl, BoundSkin) :
+        return bctl.skin
+    #end if
+    if isinstance(bctl, Skin) :
+        return bctl
+    #end if
+    return getattr(bctl, "skin", None)
+#end _controller_skin
+
+def _controller_skeleton_map(scene) :
+    "Map controller id → skeleton joint id from instance_controller elements."
+    mapping = {}
+
+    def walk(node) :
+        if isinstance(node, ControllerNode) :
+            cid = getattr(getattr(node, "controller", None), "id", None)
+            skel = _xml_skeleton_id(getattr(node, "xmlnode", None))
+            if cid and skel :
+                mapping[cid] = skel
+            #end if
+        #end if
+        children = ()
+        if isinstance(node, Scene) :
+            children = node.nodes
+        elif isinstance(node, Node) :
+            children = node.children
+        elif isinstance(node, NodeNode) :
+            children = node.node.children
+        #end if
+        for child in children :
+            walk(child)
+        #end for
+    #end walk
+
+    if scene is not None :
+        walk(scene)
+    #end if
+    return mapping
+#end _controller_skeleton_map
+
+def _controller_object_matrix(bctl) :
+    "Instance matrix including bind_shape so rest-pose verts line up with joints."
+    mat = Matrix.Identity(4)
+    raw = getattr(bctl, "matrix", None)
+    if raw is not None :
+        try :
+            mat = Matrix(raw)
+        except Exception :
+            mat = Matrix.Identity(4)
+        #end try
+    #end if
+    skin = _controller_skin(bctl)
+    bsm = getattr(skin, "bind_shape_matrix", None) if skin is not None else None
+    if bsm is not None :
+        try :
+            mat = mat @ Matrix(bsm)
+        except Exception :
+            pass
+        #end try
+    #end if
+    return mat
+#end _controller_object_matrix
 
 class _ImportProgress :
     "Best-effort Blender status-bar progress for long COLLADA imports."
@@ -321,14 +500,29 @@ class ColladaImport :
         basename = os.path.basename(filepath)
         self._ctx = ctx
         self._collada = collada
-        self._recognize_blender_extensions = kwargs["recognize_blender_extensions"]
-        self._transformation = kwargs["transformation"]
+        self._recognize_blender_extensions = kwargs.get("recognize_blender_extensions", True)
+        self._transformation = kwargs.get("transformation", "PARENT")
+        self._import_units = bool(kwargs.get("import_units", False))
+        self._custom_normals = bool(kwargs.get("custom_normals", True))
         self._name_map = {}
         self._name_revmap = {}
         self._untitledcount = 0
-        self._units = collada.assetInfo.unitmeter
-        if self._units == None :
-            self._units = 1
+        file_meter = collada.assetInfo.unitmeter
+        if file_meter == None :
+            file_meter = 1
+        #end if
+        blender_scale = float(getattr(ctx.scene.unit_settings, "scale_length", 1.0) or 1.0)
+        if self._import_units :
+            # Native: apply the file's unit scale to the Blender scene.
+            try :
+                ctx.scene.unit_settings.scale_length = float(file_meter)
+            except Exception :
+                pass
+            #end try
+            self._units = 1.0
+        else :
+            # Match import to Blender's current unit settings.
+            self._units = float(file_meter) / blender_scale
         #end if
         orient = collada.assetInfo.upaxis
         if orient == "Z_UP" :
@@ -356,6 +550,9 @@ class ColladaImport :
         self._imported = {}
         self._collection = bpy.data.collections.new(basename)
         self._ctx.scene.collection.children.link(self._collection)
+        # Skin / controller tracking (issue #3): instance_controller meshes + JOINT empties.
+        self._skin_imports = []
+        self._joint_records = []
     #end __init__
 
     def get_blender_technique(self, as_extra, obj) :
@@ -428,9 +625,18 @@ class ColladaImport :
         #end truncate_bytes
 
     #begin name
-        # Prefer COLLADA name for Empties/groups (SketchUp), otherwise id.
+        # Native MeshImporter::bc_get_dae_name: name if present, else original id.
         label = collada_label(obj)
+        native_suffix = \
+            {
+                DATABLOCK.MESH : "-mesh",
+                DATABLOCK.MATERIAL : "-material",
+                DATABLOCK.CAMERA : "-camera",
+                DATABLOCK.LAMP : "-light",
+            }.get(prefix_name)
         if prefix_name == DATABLOCK.EMPTY and label :
+            origname = label
+        elif label and prefix_name in (DATABLOCK.MESH, DATABLOCK.MATERIAL, DATABLOCK.CAMERA, DATABLOCK.LAMP) :
             origname = label
         elif hasattr(obj, "id") and obj.id != None :
             origname = obj.id
@@ -439,6 +645,9 @@ class ColladaImport :
                 if prefix != None and origname.startswith(prefix) :
                     origname = origname[len(prefix):]
                 #end if
+            #end if
+            if native_suffix and origname.endswith(native_suffix) :
+                origname = origname[:-len(native_suffix)]
             #end if
         elif label :
             origname = label
@@ -768,9 +977,11 @@ class ColladaImport :
             material_assignments = []
             uvcoords = None
             uvcoord_ids = None
+            colorcoords = None
+            colorcoord_ids = None
             # Large meshes: skip O(faces*corners) flat-shade probes (native
             # importer either uses custom normals or leaves shading alone).
-            detect_smooth = True
+            detect_smooth = bool(self._custom_normals)
             for p in primitives :
                 if isinstance(p, BoundPrimitive) :
                     b_mat_key = p.original.material
@@ -924,13 +1135,72 @@ class ColladaImport :
                     #end for
                 #end if
 
+                if "COLOR" in op.sources and len(op.sources["COLOR"]) != 0 :
+                    n_col = len(op.sources["COLOR"])
+                    if colorcoords is None :
+                        colorcoords = [[] for _ in range(n_col)]
+                        colorcoord_ids = tuple(s[2] for s in op.sources["COLOR"])
+                    elif len(colorcoords) != n_col :
+                        n_col = 0
+                    #end if
+                    if n_col :
+                        wrote = False
+                        try :
+                            index = getattr(p, "index", None)
+                            if index is not None :
+                                arr = index if np is None else np.asarray(index)
+                                for layer_i in range(n_col) :
+                                    offset = int(op.sources["COLOR"][layer_i][0])
+                                    src = op.sources["COLOR"][layer_i][-1]
+                                    data = getattr(src, "data", src)
+                                    for fi in range(nfaces) :
+                                        corners = these_faces[fi]
+                                        row = []
+                                        for ci in range(len(corners)) :
+                                            try :
+                                                cidx = int(arr[fi][ci][offset]) if arr.ndim == 3 else int(arr[fi][offset])
+                                                col = data[cidx]
+                                                if len(col) >= 4 :
+                                                    row.append((float(col[0]), float(col[1]), float(col[2]), float(col[3])))
+                                                elif len(col) >= 3 :
+                                                    row.append((float(col[0]), float(col[1]), float(col[2]), 1.0))
+                                                else :
+                                                    row.append((1.0, 1.0, 1.0, 1.0))
+                                                #end if
+                                            except Exception :
+                                                row.append((1.0, 1.0, 1.0, 1.0))
+                                            #end try
+                                        #end for
+                                        colorcoords[layer_i].append(row)
+                                    #end for
+                                #end for
+                                wrote = True
+                            #end if
+                        except Exception :
+                            wrote = False
+                        #end try
+                        if not wrote :
+                            for face in these_faces :
+                                for layer in colorcoords :
+                                    layer.append([(1.0, 1.0, 1.0, 1.0)] * len(face))
+                                #end for
+                            #end for
+                        #end if
+                elif colorcoords is not None :
+                    for face in these_faces :
+                        for layer in colorcoords :
+                            layer.append([(1.0, 1.0, 1.0, 1.0)] * len(face))
+                        #end for
+                    #end for
+                #end if
+
                 faces.extend(tuple(i + vert_start for i in f) for f in these_faces)
                 smooth_shade.extend(these_smooth_shade)
                 material_assignments.extend(these_material_assignments)
             #end for
 
-            faces, smooth_shade, material_assignments, uvcoords, rejected = _sanitize_faces(
-                faces, len(verts), smooth_shade, material_assignments, uvcoords
+            faces, smooth_shade, material_assignments, uvcoords, colorcoords, rejected = _sanitize_faces(
+                faces, len(verts), smooth_shade, material_assignments, uvcoords, colorcoords
             )
             if rejected :
                 sys.stderr.write(
@@ -1041,6 +1311,85 @@ class ColladaImport :
                 #end for
             #end if
 
+            if colorcoords is not None and b_mesh.polygons :
+                color_names = {}
+                if blendstuff is not None :
+                    layer_names = blendstuff.find(tag("layer_names"))
+                    if layer_names is not None :
+                        for name_entry in layer_names.findall(tag("name")) :
+                            if name_entry.get("type") == "COLOR" :
+                                layer_name = name_entry.get("name")
+                                layer_refid = name_entry.get("refid")
+                                if layer_name is not None and layer_refid is not None :
+                                    color_names[layer_refid] = layer_name
+                                #end if
+                            #end if
+                        #end for
+                    #end if
+                #end if
+                for layer_i, layer in enumerate(colorcoords) :
+                    refid = colorcoord_ids[layer_i] if colorcoord_ids and layer_i < len(colorcoord_ids) else None
+                    layer_name = color_names.get(unurlid(refid), "Col") if refid else "Col"
+                    attr = None
+                    try :
+                        attr = b_mesh.color_attributes.new \
+                          (
+                            name = layer_name,
+                            type = "FLOAT_COLOR",
+                            domain = "CORNER",
+                          )
+                    except Exception :
+                        attr = None
+                    #end try
+                    if attr is None :
+                        continue
+                    #end if
+                    flat = []
+                    ok = True
+                    for i, face in enumerate(b_mesh.polygons) :
+                        coords = layer[i] if i < len(layer) else None
+                        if coords is None or len(coords) < face.loop_total :
+                            ok = False
+                            break
+                        #end if
+                        for j in range(face.loop_total) :
+                            col = coords[j]
+                            r, g, b = float(col[0]), float(col[1]), float(col[2])
+                            a = float(col[3]) if len(col) > 3 else 1.0
+                            flat.extend((r, g, b, a))
+                        #end for
+                    #end for
+                    if ok and hasattr(attr, "data") and len(flat) == len(attr.data) * 4 :
+                        try :
+                            attr.data.foreach_set("color", flat)
+                        except Exception :
+                            ok = False
+                        #end try
+                    else :
+                        ok = False
+                    #end if
+                    if not ok :
+                        for i, face in enumerate(b_mesh.polygons) :
+                            if i >= len(layer) :
+                                break
+                            #end if
+                            coords = layer[i]
+                            loop_start = face.loop_start
+                            for j in range(min(face.loop_total, len(coords))) :
+                                col = coords[j]
+                                r, g, b = float(col[0]), float(col[1]), float(col[2])
+                                a = float(col[3]) if len(col) > 3 else 1.0
+                                try :
+                                    attr.data[loop_start + j].color = (r, g, b, a)
+                                except Exception :
+                                    break
+                                #end try
+                            #end for
+                        #end for
+                    #end if
+                #end for
+            #end if
+
             if material_assignments and len(material_assignments) == len(b_mesh.polygons) :
                 try :
                     b_mesh.polygons.foreach_set("material_index", material_assignments)
@@ -1097,11 +1446,35 @@ class ColladaImport :
         return b_obj
     #end geometry
 
+    def controller(self, bctl) :
+        "Instantiate the geometry referenced by a skin/morph controller (bind pose)."
+        bgeom = _bound_geometry_from_controller(bctl)
+        if bgeom is None :
+            sys.stderr.write(
+                "import_collada: skipped controller %s (no resolvable geometry)\n"
+                % (getattr(bctl, "id", None) or type(bctl).__name__)
+            )
+            return None
+        #end if
+        b_obj = self.geometry(bgeom)
+        skin = _controller_skin(bctl)
+        self._skin_imports.append(
+            {
+                "bound": bctl,
+                "b_obj": b_obj,
+                "skin": skin,
+                "controller_id": getattr(bctl, "id", None),
+            }
+        )
+        return b_obj
+    #end controller
+
     obj_type_handlers = \
         [
             ("camera", camera, CameraNode),
             ("light", light, LightNode),
             ("geometry", geometry, GeometryNode),
+            ("controller", controller, ControllerNode),
         ]
 
     class Material :
@@ -1387,6 +1760,18 @@ class ColladaImport :
                 local = node_matrix @ local
             #end if
             self._attach_with_local_matrix(b_obj, parent, local)
+            if _node_is_joint(src) :
+                xml = getattr(src, "xmlnode", None)
+                self._joint_records.append(
+                    {
+                        "src": src,
+                        "b_obj": b_obj,
+                        "id": xml.get("id") if xml is not None else getattr(src, "id", None),
+                        "sid": xml.get("sid") if xml is not None else None,
+                        "name": xml.get("name") if xml is not None else getattr(src, "name", None),
+                    }
+                )
+            #end if
             parent = b_obj
         else :
             handle_type = tuple(h for h in self.obj_type_handlers if isinstance(node, h[2]))
@@ -1399,9 +1784,17 @@ class ColladaImport :
                 bobj = bobj[0]
                 b_obj = handle_type[1](self, bobj)
                 if b_obj != None :
-                    local = Matrix.Identity(4)
-                    if hasattr(bobj, "matrix") and bobj.matrix is not None :
-                        local = self._convert_units_matrix(Matrix(bobj.matrix))
+                    if isinstance(node, ControllerNode) :
+                        local = self._convert_units_matrix(_controller_object_matrix(bobj))
+                        skel = _xml_skeleton_id(getattr(node, "xmlnode", None))
+                        if self._skin_imports :
+                            self._skin_imports[-1]["skeleton"] = skel
+                        #end if
+                    else :
+                        local = Matrix.Identity(4)
+                        if hasattr(bobj, "matrix") and bobj.matrix is not None :
+                            local = self._convert_units_matrix(Matrix(bobj.matrix))
+                        #end if
                     #end if
                     if node_matrix != None :
                         local = node_matrix @ local
@@ -1414,10 +1807,641 @@ class ColladaImport :
         return parent
     #end parent_node
 
+    def _apply_skin_weights(self, b_obj, skin, name_map = None) :
+        "Create vertex groups from COLLADA <vertex_weights> (bind-pose influences)."
+        if b_obj is None or skin is None or b_obj.data is None :
+            return 0
+        #end if
+        nverts = len(b_obj.data.vertices)
+        joint_index = getattr(skin, "joint_index", None)
+        weight_index = getattr(skin, "weight_index", None)
+        if not joint_index or not weight_index :
+            return 0
+        #end if
+        n = min(nverts, len(joint_index), len(weight_index))
+        if n == 0 :
+            return 0
+        #end if
+        if len(joint_index) != nverts :
+            sys.stderr.write(
+                "import_collada: skin %s vertex count %d != mesh %d; "
+                "assigning overlapping weights only\n"
+                % (getattr(skin, "id", "?"), len(joint_index), nverts)
+            )
+        #end if
+        groups = {}
+        assigned = 0
+        for vi in range(n) :
+            jrow = joint_index[vi]
+            wrow = weight_index[vi]
+            try :
+                pairs = zip(jrow, wrow)
+            except TypeError :
+                continue
+            #end try
+            for ji, wi in pairs :
+                try :
+                    jname = str(skin.weight_joints[int(ji)])
+                    weight = _float_weight(skin.weights[int(wi)])
+                except Exception :
+                    continue
+                #end try
+                if name_map :
+                    jname = name_map.get(jname, jname)
+                #end if
+                if not jname or weight <= 0.0 :
+                    continue
+                #end if
+                vg = groups.get(jname)
+                if vg is None :
+                    try :
+                        vg = b_obj.vertex_groups.new(name = jname)
+                    except RuntimeError :
+                        vg = b_obj.vertex_groups.get(jname)
+                    #end try
+                    groups[jname] = vg
+                #end if
+                if vg is None :
+                    continue
+                #end if
+                try :
+                    vg.add([vi], float(weight), "REPLACE")
+                except Exception :
+                    continue
+                #end try
+            #end for
+            assigned += 1
+        #end for
+        return assigned
+    #end _apply_skin_weights
+
+    def _joint_lookup(self) :
+        "Map COLLADA joint id/sid/name → Empty object created during Parenting."
+        by_key = {}
+        for rec in self._joint_records :
+            b_obj = rec.get("b_obj")
+            if b_obj is None :
+                continue
+            #end if
+            for key in (rec.get("sid"), rec.get("id"), rec.get("name")) :
+                if key :
+                    by_key[key] = rec
+                #end if
+            #end for
+        #end for
+        return by_key
+    #end _joint_lookup
+
+    def _collect_joint_tree(self, root_rec, by_key = None) :
+        "Depth-first joint records under a skeleton root Empty."
+        root_obj = root_rec["b_obj"]
+        joint_objs = set(rec["b_obj"] for rec in self._joint_records if rec.get("b_obj") is not None)
+        ordered = []
+        seen = set()
+
+        def walk(obj) :
+            if obj is None or obj in seen or obj not in joint_objs :
+                return
+            #end if
+            seen.add(obj)
+            rec = None
+            for r in self._joint_records :
+                if r.get("b_obj") == obj :
+                    rec = r
+                    break
+                #end if
+            #end for
+            if rec is None :
+                return
+            #end if
+            ordered.append(rec)
+            children = list(obj.children)
+            children.sort(key = lambda c : c.name)
+            for child in children :
+                walk(child)
+            #end for
+        #end walk
+
+        walk(root_obj)
+        return ordered
+    #end _collect_joint_tree
+
+    def _safe_mode_set(self, mode) :
+        ctx = self._ctx
+        view_layer = getattr(ctx, "view_layer", None)
+        active = view_layer.objects.active if view_layer is not None else None
+        if active is not None and hasattr(ctx, "temp_override") :
+            try :
+                with ctx.temp_override(active_object = active, object = active) :
+                    bpy.ops.object.mode_set(mode = mode)
+                    return True
+                #end with
+            except Exception :
+                pass
+            #end try
+        #end if
+        try :
+            bpy.ops.object.mode_set(mode = mode)
+            return True
+        except Exception as exc :
+            sys.stderr.write("import_collada: mode_set(%s) failed: %s\n" % (mode, exc))
+            return False
+        #end try
+    #end _safe_mode_set
+
+    def _create_armature_from_joint_empties(self, root_rec, joint_recs) :
+        "Build one Armature whose bones match the JOINT Empty hierarchy."
+        ctx = self._ctx
+        view_layer = getattr(ctx, "view_layer", None)
+        if view_layer is None or not joint_recs :
+            return None, {}
+        #end if
+        root_obj = root_rec["b_obj"]
+        arm_name = self.name(
+            DATABLOCK.ARMATURE,
+            root_rec.get("src") or root_obj,
+        )
+        arm_data = bpy.data.armatures.new(arm_name)
+        arm_obj = bpy.data.objects.new(arm_data.name, arm_data)
+        self._collection.objects.link(arm_obj)
+        parent = root_obj.parent
+        if parent is not None :
+            arm_obj.parent = parent
+            arm_obj.matrix_world = parent.matrix_world.copy()
+        else :
+            arm_obj.matrix_world = Matrix.Identity(4)
+        #end if
+
+        prev_active = view_layer.objects.active
+        prev_selected = [o for o in getattr(ctx, "selected_objects", [])]
+        try :
+            try :
+                bpy.ops.object.mode_set(mode = "OBJECT")
+            except Exception :
+                pass
+            #end try
+            for obj in list(prev_selected) :
+                try :
+                    obj.select_set(False)
+                except Exception :
+                    pass
+                #end try
+            #end for
+            view_layer.objects.active = arm_obj
+            try :
+                arm_obj.select_set(True)
+            except Exception :
+                pass
+            #end try
+            if not self._safe_mode_set("EDIT") :
+                try :
+                    bpy.data.objects.remove(arm_obj, do_unlink = True)
+                    bpy.data.armatures.remove(arm_data)
+                except Exception :
+                    pass
+                #end try
+                return None, {}
+            #end if
+
+            ebs = arm_data.edit_bones
+            bones = {}
+            name_map = {}
+            arm_inv = arm_obj.matrix_world.inverted()
+            rec_by_obj = dict((rec["b_obj"], rec) for rec in joint_recs)
+
+            for rec in joint_recs :
+                empty = rec["b_obj"]
+                raw_name = rec.get("sid") or rec.get("id") or rec.get("name") or empty.name
+                bone_name = str(raw_name)[:MAX_NAME_LENGTH]
+                try :
+                    eb = ebs.new(bone_name)
+                except Exception :
+                    eb = ebs.new(empty.name[:MAX_NAME_LENGTH])
+                #end try
+                mat = arm_inv @ empty.matrix_world
+                head = mat.to_translation()
+                child_heads = []
+                for child in empty.children :
+                    if child in rec_by_obj :
+                        child_heads.append((arm_inv @ child.matrix_world).to_translation())
+                    #end if
+                #end for
+                tail = None
+                if child_heads :
+                    # Aim at the nearest joint child so the bone is visible.
+                    child_heads.sort(key = lambda p : (p - head).length)
+                    candidate = child_heads[0]
+                    if (candidate - head).length > 1e-4 * max(self._units, 1e-6) :
+                        tail = candidate
+                    #end if
+                #end if
+                if tail is None :
+                    y_axis = mat.to_3x3() @ Vector((0.0, 1.0, 0.0))
+                    if y_axis.length < 1e-8 :
+                        y_axis = Vector((0.0, 0.0, 1.0))
+                    #end if
+                    y_axis.normalize()
+                    length = 0.05 * max(self._units, 1.0)
+                    parent_empty = empty.parent
+                    if parent_empty is not None and parent_empty in rec_by_obj :
+                        parent_head = (arm_inv @ parent_empty.matrix_world).to_translation()
+                        inherited = (head - parent_head).length
+                        if inherited > length :
+                            length = inherited * 0.5
+                        #end if
+                    #end if
+                    tail = head + y_axis * length
+                #end if
+                if (tail - head).length < 1e-6 :
+                    tail = head + Vector((0.0, 0.0, 0.05 * max(self._units, 1.0)))
+                #end if
+                eb.head = head
+                eb.tail = tail
+                eb.use_connect = False
+                parent_empty = empty.parent
+                if parent_empty in bones :
+                    eb.parent = bones[parent_empty]
+                #end if
+                bones[empty] = eb
+                actual = eb.name
+                for key in (rec.get("sid"), rec.get("id"), rec.get("name"), raw_name) :
+                    if key :
+                        name_map[str(key)] = actual
+                    #end if
+                #end for
+            #end for
+        finally :
+            try :
+                if getattr(ctx, "mode", "") == "EDIT_ARMATURE" :
+                    self._safe_mode_set("OBJECT")
+                #end if
+            except Exception :
+                try :
+                    bpy.ops.object.mode_set(mode = "OBJECT")
+                except Exception :
+                    pass
+                #end try
+            #end try
+            try :
+                arm_obj.select_set(False)
+            except Exception :
+                pass
+            #end try
+            for obj in prev_selected :
+                try :
+                    obj.select_set(True)
+                except Exception :
+                    pass
+                #end try
+            #end for
+            view_layer.objects.active = prev_active
+        #end try
+        return arm_obj, name_map
+    #end _create_armature_from_joint_empties
+
+    def _reparent_nonjoint_children(self, joint_recs, arm_obj, name_map) :
+        "Keep accessory NODE empties (weapon sockets, etc.) on the matching bone."
+        joint_objs = set(rec["b_obj"] for rec in joint_recs)
+        for rec in joint_recs :
+            empty = rec["b_obj"]
+            bone_name = name_map.get(rec.get("sid")) or name_map.get(rec.get("id")) or name_map.get(rec.get("name"))
+            if not bone_name :
+                continue
+            #end if
+            for child in list(empty.children) :
+                if child in joint_objs :
+                    continue
+                #end if
+                try :
+                    mw = child.matrix_world.copy()
+                    child.parent = arm_obj
+                    child.parent_type = "BONE"
+                    child.parent_bone = bone_name
+                    child.matrix_world = mw
+                except Exception as exc :
+                    sys.stderr.write(
+                        "import_collada: could not reparent %s to bone %s: %s\n"
+                        % (child.name, bone_name, exc)
+                    )
+                #end try
+            #end for
+        #end for
+    #end _reparent_nonjoint_children
+
+    def _remove_joint_empties(self, joint_recs) :
+        for rec in joint_recs :
+            empty = rec.get("b_obj")
+            if empty is None :
+                continue
+            #end if
+            try :
+                bpy.data.objects.remove(empty, do_unlink = True)
+            except Exception :
+                try :
+                    empty.user_clear()
+                    bpy.data.objects.remove(empty)
+                except Exception :
+                    pass
+                #end try
+            #end try
+        #end for
+    #end _remove_joint_empties
+
+    def _add_armature_modifier(self, b_obj, arm_obj) :
+        if b_obj is None or arm_obj is None :
+            return
+        #end if
+        try :
+            mod = b_obj.modifiers.new("Armature", "ARMATURE")
+            mod.object = arm_obj
+            mod.use_vertex_groups = True
+        except Exception as exc :
+            sys.stderr.write(
+                "import_collada: Armature modifier failed on %s: %s\n"
+                % (b_obj.name, exc)
+            )
+        #end try
+    #end _add_armature_modifier
+
+    def _resolve_skeleton_root(self, by_key, skeleton_id) :
+        if skeleton_id and skeleton_id in by_key :
+            return by_key[skeleton_id]
+        #end if
+        # Fall back to a joint Empty whose parent is not a joint.
+        joint_objs = set(rec["b_obj"] for rec in self._joint_records if rec.get("b_obj") is not None)
+        for rec in self._joint_records :
+            parent = rec["b_obj"].parent if rec.get("b_obj") is not None else None
+            if parent is None or parent not in joint_objs :
+                return rec
+            #end if
+        #end for
+        return self._joint_records[0] if self._joint_records else None
+    #end _resolve_skeleton_root
+
+    def _harvest_collada_joints(self) :
+        "Walk the COLLADA scene and return joint dicts with blender-space worlds."
+        harvested = []
+        scene = getattr(self._collada, "scene", None)
+        if scene is None :
+            return harvested
+        #end if
+
+        def walk(node, parent_world, parent_joint_key) :
+            if isinstance(node, Scene) :
+                for child in node.nodes :
+                    walk(child, None, None)
+                #end for
+                return
+            #end if
+            if isinstance(node, NodeNode) :
+                walk(node.node, parent_world, parent_joint_key)
+                return
+            #end if
+            if not isinstance(node, Node) :
+                return
+            #end if
+            local = self._convert_units_matrix(Matrix(node.matrix))
+            if parent_world is None :
+                world = self._orient @ local
+            else :
+                world = parent_world @ local
+            #end if
+            key = parent_joint_key
+            if _node_is_joint(node) :
+                xml = getattr(node, "xmlnode", None)
+                rec = {
+                    "src": node,
+                    "world": world,
+                    "id": xml.get("id") if xml is not None else getattr(node, "id", None),
+                    "sid": xml.get("sid") if xml is not None else None,
+                    "name": xml.get("name") if xml is not None else getattr(node, "name", None),
+                    "parent_key": parent_joint_key,
+                }
+                harvested.append(rec)
+                key = rec.get("sid") or rec.get("id") or rec.get("name")
+            #end if
+            for child in node.children :
+                walk(child, world, key)
+            #end for
+        #end walk
+
+        walk(scene, None, None)
+        return harvested
+    #end _harvest_collada_joints
+
+    def _armature_from_collada_scene(self) :
+        "MUL/APPLY fallback: build an Armature from JOINT node world matrices."
+        harvested = self._harvest_collada_joints()
+        if not harvested :
+            return None, {}
+        #end if
+        ctx = self._ctx
+        view_layer = getattr(ctx, "view_layer", None)
+        if view_layer is None :
+            return None, {}
+        #end if
+        root = harvested[0]
+        arm_name = self.name(DATABLOCK.ARMATURE, root.get("src"))
+        arm_data = bpy.data.armatures.new(arm_name)
+        arm_obj = bpy.data.objects.new(arm_data.name, arm_data)
+        self._collection.objects.link(arm_obj)
+        arm_obj.matrix_world = Matrix.Identity(4)
+        prev_active = view_layer.objects.active
+        try :
+            try :
+                bpy.ops.object.mode_set(mode = "OBJECT")
+            except Exception :
+                pass
+            #end try
+            view_layer.objects.active = arm_obj
+            try :
+                arm_obj.select_set(True)
+            except Exception :
+                pass
+            #end try
+            if not self._safe_mode_set("EDIT") :
+                try :
+                    bpy.data.objects.remove(arm_obj, do_unlink = True)
+                except Exception :
+                    pass
+                #end try
+                return None, {}
+            #end if
+            ebs = arm_data.edit_bones
+            bones = {}
+            name_map = {}
+            for rec in harvested :
+                raw_name = rec.get("sid") or rec.get("id") or rec.get("name") or "joint"
+                try :
+                    eb = ebs.new(str(raw_name)[:MAX_NAME_LENGTH])
+                except Exception :
+                    continue
+                #end try
+                mat = rec["world"]
+                head = mat.to_translation()
+                child_heads = [
+                    child["world"].to_translation()
+                    for child in harvested
+                    if child.get("parent_key") in (rec.get("sid"), rec.get("id"), rec.get("name"))
+                ]
+                tail = None
+                if child_heads :
+                    child_heads.sort(key = lambda p : (p - head).length)
+                    if (child_heads[0] - head).length > 1e-4 :
+                        tail = child_heads[0]
+                    #end if
+                #end if
+                if tail is None :
+                    y_axis = mat.to_3x3() @ Vector((0.0, 1.0, 0.0))
+                    if y_axis.length < 1e-8 :
+                        y_axis = Vector((0.0, 0.0, 1.0))
+                    #end if
+                    y_axis.normalize()
+                    tail = head + y_axis * (0.05 * max(self._units, 1.0))
+                #end if
+                eb.head = head
+                eb.tail = tail
+                eb.use_connect = False
+                parent_key = rec.get("parent_key")
+                if parent_key in bones :
+                    eb.parent = bones[parent_key]
+                #end if
+                actual = eb.name
+                for key in (rec.get("sid"), rec.get("id"), rec.get("name"), raw_name) :
+                    if key :
+                        bones[key] = eb
+                        name_map[str(key)] = actual
+                    #end if
+                #end for
+            #end for
+        finally :
+            try :
+                self._safe_mode_set("OBJECT")
+            except Exception :
+                pass
+            #end try
+            try :
+                arm_obj.select_set(False)
+            except Exception :
+                pass
+            #end try
+            view_layer.objects.active = prev_active
+        #end try
+        return arm_obj, name_map
+    #end _armature_from_collada_scene
+
+    def finalize_skins(self) :
+        """
+        After objects exist: build an Armature from JOINT nodes, assign skin
+        weights (using final bone names), bind meshes, and remove placeholder
+        joint Empties.
+        """
+        if not self._skin_imports :
+            return
+        #end if
+
+        def weight_and_bind(arm_obj, name_map, skeleton_id = None) :
+            n = 0
+            for rec in self._skin_imports :
+                rec_skel = rec.get("skeleton")
+                if skeleton_id and rec_skel and rec_skel != skeleton_id :
+                    continue
+                #end if
+                b_obj = rec.get("b_obj")
+                skin = rec.get("skin")
+                if b_obj is None or skin is None :
+                    continue
+                #end if
+                n += 1 if self._apply_skin_weights(b_obj, skin, name_map) else 0
+                self._add_armature_modifier(b_obj, arm_obj)
+            #end for
+            return n
+        #end weight_and_bind
+
+        if not self._joint_records :
+            arm_obj, name_map = self._armature_from_collada_scene()
+            if arm_obj is not None :
+                weighted = weight_and_bind(arm_obj, name_map)
+                sys.stderr.write(
+                    "import_collada: instantiated %d controller mesh(es), "
+                    "weighted %d, created Armature from COLLADA JOINT nodes\n"
+                    % (len(self._skin_imports), weighted)
+                )
+            else :
+                weighted = 0
+                for rec in self._skin_imports :
+                    weighted += 1 if self._apply_skin_weights(rec.get("b_obj"), rec.get("skin")) else 0
+                #end for
+                sys.stderr.write(
+                    "import_collada: imported %d controller mesh(es); no JOINT nodes "
+                    "to convert into an Armature\n" % len(self._skin_imports)
+                )
+            #end if
+            return
+        #end if
+
+        by_key = self._joint_lookup()
+        # One armature per distinct skeleton root referenced by controllers.
+        skeleton_ids = []
+        for rec in self._skin_imports :
+            sid = rec.get("skeleton")
+            if sid and sid not in skeleton_ids :
+                skeleton_ids.append(sid)
+            #end if
+        #end for
+        if not skeleton_ids :
+            skeleton_ids.append(None)
+        #end if
+
+        built = []
+        used_joints = set()
+        weighted = 0
+        for skel_id in skeleton_ids :
+            root_rec = self._resolve_skeleton_root(by_key, skel_id)
+            if root_rec is None or root_rec["b_obj"] in used_joints :
+                continue
+            #end if
+            joint_recs = self._collect_joint_tree(root_rec, by_key)
+            if not joint_recs :
+                continue
+            #end if
+            arm_obj, name_map = self._create_armature_from_joint_empties(root_rec, joint_recs)
+            if arm_obj is None :
+                sys.stderr.write(
+                    "import_collada: could not create Armature for skeleton %s; "
+                    "leaving JOINT Empties in place\n" % (skel_id or "?")
+                )
+                continue
+            #end if
+            weighted += weight_and_bind(arm_obj, name_map, skel_id)
+            self._reparent_nonjoint_children(joint_recs, arm_obj, name_map)
+            built.append((arm_obj, joint_recs))
+            for rec in joint_recs :
+                used_joints.add(rec["b_obj"])
+            #end for
+        #end for
+
+        for arm_obj, joint_recs in built :
+            self._remove_joint_empties(joint_recs)
+        #end for
+
+        if not built :
+            for rec in self._skin_imports :
+                weighted += 1 if self._apply_skin_weights(rec.get("b_obj"), rec.get("skin")) else 0
+            #end for
+        #end if
+
+        sys.stderr.write(
+            "import_collada: instantiated %d controller mesh(es), "
+            "weighted %d, created %d Armature(s) from JOINT nodes\n"
+            % (len(self._skin_imports), weighted, len(built))
+        )
+    #end finalize_skins
+
     @classmethod
     def match(celf, collada) :
         return True
-   #end match
+    #end match
 
 #end ColladaImport
 
@@ -1780,7 +2804,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
             children = node.node.children
         #end if
         for child in children :
-            if isinstance(child, (Scene, Node, NodeNode, CameraNode, GeometryNode, LightNode)) :
+            if isinstance(child, (Scene, Node, NodeNode) + _INSTANCE_NODES) :
                 total += count_hierarchy_nodes(child)
             #end if
         #end for
@@ -1829,7 +2853,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                   ( # children which would be presented as objects other than Empties
                     c
                     for c in children
-                    if isinstance(c, (CameraNode, GeometryNode, LightNode)) # ControllerNode NYI
+                    if isinstance(c, _INSTANCE_NODES)
                   )
                 src = _node_src(node)
                 node_matrix = self._convert_units_matrix(Matrix(src.matrix))
@@ -1858,7 +2882,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
             child = children[0]
             if isinstance(child, (Node, NodeNode)) :
                 traverse_children(self, child, action, parent, combined)
-            elif isinstance(child, (CameraNode, GeometryNode, LightNode)) :
+            elif isinstance(child, _INSTANCE_NODES) :
                 action(child, parent, combined)
             #end if
             return
@@ -1927,6 +2951,7 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
         created = 0
         failed = 0
         progress.update_fraction(0.20)
+        controller_skeletons = _controller_skeleton_map(c.scene)
         if tf in ("MUL", "APPLY") :
             all_jobs = []
             for handle_type in importer.obj_type_handlers :
@@ -1962,6 +2987,12 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                     #end if
                     created += 1
                     done += 1
+                    if handle_type[0] == "controller" and importer._skin_imports :
+                        cid = getattr(obj, "id", None)
+                        if cid and cid in controller_skeletons :
+                            importer._skin_imports[-1]["skeleton"] = controller_skeletons[cid]
+                        #end if
+                    #end if
                     progress.update_fraction(0.20 + 0.80 * (done / float(total_objs)))
                     now = time.time()
                     if now - last_update >= update_interval :
@@ -1972,10 +3003,18 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                         last_update = now
                     #end if
                     if tf == "MUL" :
-                        tf_mat = get_obj_matrix(obj)
+                        if handle_type[0] == "controller" :
+                            tf_mat = importer._convert_units_matrix(
+                                _controller_object_matrix(obj)
+                            )
+                        else :
+                            tf_mat = get_obj_matrix(obj)
+                            if tf_mat is not None :
+                                tf_mat = importer._convert_units_matrix(tf_mat)
+                            #end if
+                        #end if
                         if tf_mat is not None :
-                            tf_mat = importer._orient @ importer._convert_units_matrix(tf_mat)
-                            b_obj.matrix_world = tf_mat
+                            b_obj.matrix_world = importer._orient @ tf_mat
                         #end if
                     #end if
                 #end for
@@ -2010,6 +3049,21 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
                 return {"CANCELLED"}
             #end try
         #end if
+        for rec in importer._skin_imports :
+            if rec.get("skeleton") :
+                continue
+            #end if
+            cid = rec.get("controller_id")
+            if cid and cid in controller_skeletons :
+                rec["skeleton"] = controller_skeletons[cid]
+            #end if
+        #end for
+        try :
+            importer.finalize_skins()
+        except Exception as exc :
+            sys.stderr.write("import_collada: skin/armature finalize failed: %s\n" % exc)
+            traceback.print_exc()
+        #end try
         progress.update_fraction(1.0)
         now = time.time()
         sys.stderr.write("Time to import to Blender = %.2fs\n" % (now - start_time))
@@ -2022,6 +3076,12 @@ def load(op, ctx, is_zae, filepath, **kwargs) :
             elif failed and not created :
                 op.report({"ERROR"}, "Import failed for all objects; see System Console")
                 return {"CANCELLED"}
+            elif importer._skin_imports :
+                op.report(
+                    {"INFO"},
+                    "Imported %d skinned mesh(es) from instance_controller"
+                    % len(importer._skin_imports),
+                )
             elif err_count and not failed :
                 # Already reported parse issues above; keep a brief success note.
                 op.report(

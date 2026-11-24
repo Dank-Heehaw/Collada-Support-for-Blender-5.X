@@ -9,7 +9,7 @@ Use this add-on when you need to open or save `.dae` files (and related archives
 
 ## Features
 
-- **Import** COLLADA scenes: triangle and polylist meshes, UVs, vertex colors, basic materials, textures, cameras, and lights
+- **Import** COLLADA scenes: triangle and polylist meshes, UVs, vertex colors, basic materials, textures, cameras, lights, and skinned `instance_controller` meshes (bind-pose Armature/weights)
 - **Export** meshes (plus curves/text converted to mesh), Principled BSDF materials, parenting, UVs, vertex colors, loop normals, textures, bind-pose armatures/skins, and ZAE packages
 - **Archive formats**: `.zae` (official COLLADA zip), `.kmz` (Earth/Warehouse-style), and generic `.zip` containing a `.dae`
 - **COLLADA versions** on export: 1.4.1 or 1.5.0
@@ -45,7 +45,7 @@ This extension ships **pycollada** (and its small dependencies) as wheels inside
 
 ## Limitations
 
-- Skin **animation** libraries are not written yet (bind-pose armature/skin **export** and morph target geometries are in 2.0.1)
+- Skin **animation** libraries are not written yet (bind-pose armature/skin **import and export** and morph target geometries are in 2.0.3)
 - Custom split-normal attributes beyond smooth vs flat faces are not full native parity
 - Very large scenes remain CPU-bound during XML parse
 - Nested ZAE sub-archives are not supported
