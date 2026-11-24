@@ -1,6 +1,6 @@
 # Blender Extensions Platform — Submission checklist
 
-Copy each section into the **Submit add-on for approval** form. Upload files from the paths listed below.
+Copy each section into the **Submit add-on for approval** form. Do not duplicate project docs here: listing copy is [DESCRIPTION.md](DESCRIPTION.md); version history is [CHANGELOG.md](../CHANGELOG.md).
 
 | Field / asset | Value or path |
 | --- | --- |
@@ -13,21 +13,17 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 
 ## 1. Description (Markdown)
 
-Paste the full contents of:
-
-`F:\Projects\Addons\Blender-Collade-Support\submission\DESCRIPTION.md`
+Paste the full contents of `submission/DESCRIPTION.md`.
 
 ---
 
 ## 2. Support URL
 
-Use this issues tracker on the Extensions form:
-
 ```
 https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
 ```
 
-Repo home (also set as `website` / `doc_url` in the package):
+Repo home (`website` / `doc_url`):
 
 ```
 https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
@@ -37,155 +33,31 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 ## 3. Version release notes (Markdown)
 
-Paste the full contents of:
-
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.3.md`
+Paste the **[2.0.3]** section from [CHANGELOG.md](../CHANGELOG.md). `RELEASE_NOTES_2.0.3.md` is a pointer to that file.
 
 ---
 
 ## 4. Icon (256×256 PNG)
 
-Upload:
-
-`F:\Projects\Addons\Blender-Collade-Support\submission\icon.png`
-
-- Format: PNG  
-- Size: **256×256**
-
----
+`submission/icon.png` — PNG, **256×256**
 
 ## 5. Featured image (≥1920×1080, 16:9)
 
-Upload:
-
-`F:\Projects\Addons\Blender-Collade-Support\submission\featured.png`
-
-- Format: PNG  
-- Size: **1920×1080** (16:9)
-
----
+`submission/featured.png` — PNG, **1920×1080** (16:9)
 
 ## 6. Optional previews
 
-Upload (optional but recommended):
-
-`F:\Projects\Addons\Blender-Collade-Support\submission\preview_import.png`
-
-- Format: PNG  
-- Size: **1920×1080**  
-- Shows a File → Import → COLLADA concept mockup
-
-You can add a second preview later (e.g. Export menu / sample scene) if the form allows multiple images.
-
----
-
-## Quick paste — Description
-
-```markdown
-# Collada Support
-
-Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
-
-**Homepage:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
-**Support / issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues
-
-Use this add-on when you need to open or save `.dae` files (and related archives) in Blender 5.0 and newer.
-
-## Features
-
-- **Import** COLLADA scenes: triangle and polylist meshes, UVs, basic materials, textures, cameras, and lights
-- **Export** meshes, Principled BSDF materials, parenting, optional textures, and ZAE packages
-- **Archive formats**: `.zae` (official COLLADA zip), `.kmz` (Earth/Warehouse-style), and generic `.zip` containing a `.dae`
-- **COLLADA versions** on export: 1.4.1 or 1.5.0
-- Import **Parenting** mode recreates SketchUp-style groups as Empties (default)
-- SketchUp and common transform quirks handled where practical
-- Import hardening inspired by Blender 4.5’s native importer patterns (safer mesh validation, fewer crashes on bad data)
-
-## Install
-
-1. Download the extension package (or `blender_collada_support.zip`).
-2. In Blender 5: **Edit → Preferences → Get Extensions / Add-ons → Install from Disk…** and select the zip.
-3. Enable **Collada Support**.
-4. `pycollada` is **bundled as wheels** — dependencies are not installed via pip.
-5. If wheels fail to load, reinstall the release zip (do not use pip).
-
-Menus after install:
-
-- **File → Import → COLLADA (.dae, .zae, .kmz, .zip)**
-- **File → Export → COLLADA (.dae, .zae)**
-
-## Formats
-
-| Format | Role |
-| --- | --- |
-| `.dae` | Standard COLLADA document |
-| `.zae` | Zipped COLLADA (`manifest.xml` or auto-picked `.dae`) |
-| `.kmz` | Zip with embedded `.dae` and textures |
-| `.zip` | Any zip that contains a `.dae` |
-
-## Bundled dependency
-
-This extension ships **pycollada** (and its small dependencies) as wheels inside the package so Blender can load them without a system Python install step.
-
-## Limitations
-
-- No skin / armature / animation import or export yet (not full OpenCOLLADA parity)
-- No morph / shape-key I/O yet
-- No custom split-normals / vertex-color parity with the old native importer
-- Very large scenes remain CPU-bound during XML parse
-- Nested ZAE sub-archives are not supported
-
-## Credits
-
-Built on the pycollada Blender lineage:
-
-- [blender_pycollada_importexport](https://github.com/ldo/blender_pycollada_importexport) (Lawrence D'Oliveiro and earlier contributors)
-- [B5Collada](https://github.com/KimsFerdy/blender_pycollada_importexport) (Kims Ferdy)
-- Upstream library: [pycollada](https://github.com/pycollada/pycollada)
-- Import hardening lessons from Blender 4.5’s native COLLADA importer patterns and related community work
-
-## License
-
-**GPL-3.0-or-later**
-```
-
----
-
-## Quick paste — Release notes (2.0.3)
-
-```markdown
-# Collada Support 2.0.3
-
-## Changes
-
-- **Mesh export rewritten** on Blender’s Mesh API (`obj.to_mesh` / evaluated mesh, `vertices`, `polygons`, `loops`, `uv_layers`, `color_attributes`, `loop_triangles`). BMesh is no longer used for COLLADA mesh export.
-- **Crash fix:** persistent BMLoopSeq crash on Blender 5 is gone because the exporter never builds or indexes BMesh loops. Shipped Python has no `ensure_lookup_table` calls.
-- Named nodes, materials, texture copy, skins/controllers, morphs, and the FBX-style Include/Transform/Geometry/Armature/Animation/Extra options are unchanged — rebuilt on Mesh data.
-- **Also includes 2.0.2:** skin import from `<instance_controller>` ([#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3)), export fidelity vs Blender 4.5 native COLLADA, native operator names/IDs, and FBX-style File Browser panels.
-
-**Install:** remove the old add-on, quit Blender fully, then **Install from Disk** `blender_collada_support.zip`. Confirm Preferences shows **2.0.3**. Overwriting a previous zip in place can leave 2.0.0–2.0.2 code loaded.
-
-Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
-```
+`submission/preview_import.png` — PNG, **1920×1080** (File → Import → COLLADA mockup)
 
 ---
 
 ## File index
 
 ```
-F:\Projects\Addons\Blender-Collade-Support\submission\
+submission/
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_2.0.3.md     ← form: Version release notes
-  RELEASE_NOTES_2.0.2.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_2.0.1.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_2.0.0.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.2.2.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.2.0.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.1.3.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.1.2.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.0.4.md     ← earlier notes (kept for reference)
-  RELEASE_NOTES_1.0.3.md     ← earlier notes (kept for reference)
+  RELEASE_NOTES_2.0.3.md     ← pointer to CHANGELOG.md
   icon.png                   ← 256×256
   featured.png               ← 1920×1080
   preview_import.png         ← 1920×1080 (optional preview)

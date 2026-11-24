@@ -1,9 +1,7 @@
 # TODO — Collada Support for Blender 5.X
 
-**Target:** 2.0.3 (current installable release on `master`)  
-**Branch:** `release/2.0.3` (from `release/2.0.2`)  
-**Last shipped:** 2.0.3 (`38b4b16` and docs on this line)  
-Living checklist. Longer history and parity plan live in [ROADMAP.md](ROADMAP.md).
+**Current:** 2.0.3 on `master` (`release/2.0.3`)  
+Living checklist: remaining work, later design notes, and local resource paths. Release history is only in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -39,36 +37,26 @@ Scan the whole `io\collada` folder — `MeshExporter` and related files live the
 
 ---
 
-## In progress
+## Shipped (do not re-open)
 
-_(none — 2.0.3 is the shipped Mesh-API export rewrite)_
+- [x] **2.0.3** Mesh-API export (no BMesh, no `ensure_lookup_table` calls; warning comment only)
+- [x] **2.0.2** FBX-style panels; combined I/O zip; Google Earth extras already represented ([#5](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/5))
+- [x] **2.0.1** operator / ID / skin / morph alignment with Blender 4.5 C++ exporter (`io_collada.cc`)
+- [x] **2.0.0** export fidelity (loop normals, vertex colors, named nodes, modifiers, triangulate, texture copy, bind-pose skins)
+- [x] [#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) skin **import** (`instance_controller` / bind-pose Armature + weights)
+- [x] Morph **target geometry** export (2.0.1); 1.1.0 static correctness (see changelog)
 
----
-
-## Done
-
-- [x] **2.0.3 mesh export rewrite** — drop BMesh, use Mesh API only
-  - Shipped Python has **no** `ensure_lookup_table` calls and **no** `import bmesh` in `export_collada.py`
-  - Only remaining addon hit is the required warning comment on `encode_mesh`
-  - Install path: **Remove add-on → quit Blender → Install from Disk** (overwrite is not enough)
-- [x] Confirm 2.0.3 zip has **zero** `ensure_lookup_table` calls (required comment only); user must Remove → quit → Install from Disk
-- [x] Version bumps through **2.0.3** (`blender_manifest.toml`, `bl_info`, authoring_tool string)
-- [x] Issue [#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) skin import (`instance_controller` / bind-pose meshes) — merged into `release/2.0.2`
-- [x] Export fidelity vs original Blender COLLADA (per-loop normals, vertex colors, named nodes, modifiers, triangulate, texture copy, bind-pose skins)
-- [x] 2.0.1 operator / ID / skin / morph alignment with Blender 4.5 C++ exporter
-- [x] Combined working branch `release/2.0.2` ([PR #10](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/pull/10))
-  - Issue [#5](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/5) Google Earth extras already represented
-  - Cabinet Vision PR skipped
-- [x] Export UI: FBX-style collapsible sections instead of cramped Main / Geom / Arm / Anim / Extra tabs
-- [x] [CHANGELOG.md](CHANGELOG.md) and `submission/` notes in sync with 2.0.0 / 2.0.1 / 2.0.2 / 2.0.3
+Install: **Remove add-on → quit Blender → Install from Disk** `dist/blender_collada_support.zip`. Overwrite is not enough.
 
 ---
 
 ## Remaining gaps
 
+Former ROADMAP items that are still open. Bind-pose skin I/O already shipped in 2.0.0–2.0.1; animation is the next real slice.
+
 ### Export
 
-- [ ] Animation / action libraries (`include_animations` is accepted but not fully written)
+- [ ] Animation / action libraries (`include_animations` is accepted but not written). Needs a raw XML layer — `pycollada` `Animation.load` does not build samplers/channels (old 1.6–1.7)
 - [ ] OpenSim extras (beyond current joint rest tweaks)
 - [ ] Custom split-normals beyond smooth / flat
 - [ ] Nested ZAE sub-archives
@@ -76,10 +64,18 @@ _(none — 2.0.3 is the shipped Mesh-API export rewrite)_
 
 ### Import / round-trip
 
+- [ ] Morph / shape-key **import** (export of morph target geometries is in 2.0.1; old 1.3.0)
 - [ ] Armature import chain flags are exposed but unused until skin import is fully verified
 - [ ] Round-trip testing vs Blender 4.5 native COLLADA
+- [ ] Broader interop suite vs native 4.5 files
+
+### Later design notes
+
+Planned modules (not in 2.0.3): `collada_rig.py`, `import_rig.py`, `collada_animation.py`, `export_rig.py`.
+
+Constraints: inverse-bind matrices for bone rest; bake bind-shape; normalize weights; Armature modifier. First animation slice was sketched as import-only, one controller, PARENT mode, LINEAR/STEP matrix channels.
 
 ### Not in this line
 
-- Cabinet Vision import profile (`cursor/cabinet-vision-collada-import-5f95`, draft PR #2) — keep off `master` until it is a real release
-- Standalone Google Earth PR #6 — extras already represented in 2.0.2+; do not merge that branch if it would regress 2.0.3
+- Cabinet Vision import profile (`cursor/cabinet-vision-collada-import-5f95`, draft PR #2) — keep off `master`
+- Standalone Google Earth PR #6 — extras already in 2.0.2+; do not merge that branch if it would regress 2.0.3

@@ -20,7 +20,9 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 | `collada_support/export_collada.py` | Export |
 | `collada_support/wheels/` | Unmodified PyPI `.whl` files |
 | `dist/` | Local build of the install zip (gitignored) |
-| `submission/` | Extensions Platform listing assets |
+| `submission/` | Extensions Platform listing assets (`DESCRIPTION.md`, `SUBMISSION.md`) |
+| `CHANGELOG.md` | Release history (also used as Extensions version notes) |
+| `TODO.md` | Remaining work, design notes, local resource paths |
 
 ## Development install
 

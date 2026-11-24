@@ -135,7 +135,7 @@ Blender Extensions Platform compliance.
 
 ## [1.1.0] — 2026-07-18
 
-Static correctness fixes toward Blender 4.5 parity (see [ROADMAP.md](ROADMAP.md)).
+Static correctness fixes toward Blender 4.5 parity (remaining gaps now live in [TODO.md](TODO.md)).
 
 - **Multi-material export:** primitive indices/vcounts filtered to faces for each material slot
 - **Empty material slots:** guard unbound `slot.material` instead of crashing on `.name`
@@ -144,7 +144,7 @@ Static correctness fixes toward Blender 4.5 parity (see [ROADMAP.md](ROADMAP.md)
 - **Ortho cameras:** export `xmag`/`ymag = ortho_scale / 2`; import converts half-extent and applies unit scale
 - **Parse warnings:** summarize pycollada broken refs / errors in operator reports
 - **Units:** export asset `unitmeter` from Blender `unit_settings.scale_length`
-- Document staged parity plan in `ROADMAP.md`
+- Document staged parity plan (later folded into `TODO.md`)
 
 ## [1.0.5] — 2026-07-18
 
