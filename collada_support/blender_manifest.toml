@@ -13,6 +13,7 @@ tags = ["Import-Export", "Pipeline"]
 blender_version_min = "5.0.0"
 
 license = ["SPDX:GPL-3.0-or-later"]
+copyright = ["2026 Waheed Khan"]
 
 wheels = [
     "./wheels/pycollada-0.9.1-py3-none-any.whl",
@@ -22,3 +23,10 @@ wheels = [
 
 [permissions]
 files = "Read/write COLLADA .dae/.zae/.kmz/.zip files and textures"
+
+[build]
+paths_exclude_pattern = [
+    "__pycache__/",
+    "/.git/",
+    "/*.zip",
+]

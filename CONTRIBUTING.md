@@ -22,7 +22,8 @@ Thanks for helping improve **Collada Support for Blender 5.X**.
 | `dist/` | Local build of the install zip (gitignored) |
 | `submission/` | Extensions Platform listing assets (`DESCRIPTION.md`, `SUBMISSION.md`) |
 | `CHANGELOG.md` | Release history (also used as Extensions version notes) |
-| `TODO.md` | Remaining work, design notes, local resource paths |
+| `agent.md` | Living agent brief: status, gaps, Extensions update checklist, local paths |
+| `LICENSE` | GNU GPL v3 (repo + `collada_support/LICENSE` in the zip) |
 
 ## Development install
 
@@ -41,25 +42,32 @@ After code changes: **disable → enable** the add-on, or restart Blender. Prefe
 
 ## Build the distributable zip
 
-The archive **root must be the folder** `collada_support/` (so Blender sees `collada_support/blender_manifest.toml` inside the zip).
-
-PowerShell example from the repo root:
+Prefer Blender’s official command so `blender_manifest.toml` and `__init__.py` sit at the **zip root** (what extensions.blender.org expects):
 
 ```powershell
 New-Item -ItemType Directory -Path .\dist -Force | Out-Null
-if (Test-Path .\dist\blender_collada_support.zip) {
-  Remove-Item .\dist\blender_collada_support.zip -Force
-}
-Compress-Archive -Path .\collada_support -DestinationPath .\dist\blender_collada_support.zip
+$Blender = "C:\Games\Steam\steamapps\common\Blender\blender.exe"
+& $Blender --command extension build --source-dir collada_support --output-filepath dist/blender_collada_support.zip
+& $Blender --command extension validate collada_support
+& $Blender --command extension validate dist/blender_collada_support.zip
 ```
 
 Verify entries look like:
 
-- `collada_support/__init__.py`
-- `collada_support/blender_manifest.toml`
-- `collada_support/wheels/...`
+- `__init__.py`
+- `blender_manifest.toml`
+- `LICENSE`
+- `wheels/...`
 
-**Wrong:** zipping the whole repo, or zipping so `__init__.py` sits at the zip root without the package folder.
+**Wrong:** zipping the whole repo, or wrapping files in an extra `collada_support/` folder inside the zip.
+
+Fallback if `blender.exe` is missing (Install from Disk still accepts a package folder, but the platform prefers the layout above):
+
+```powershell
+Compress-Archive -Path .\collada_support\* -DestinationPath .\dist\blender_collada_support.zip
+```
+
+(`collada_support\*` so files land at zip root, matching `extension build`.)
 
 ## Wheels and manifest
 

@@ -2,11 +2,11 @@
 
 Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
 
-**Current version: 2.0.3** — Mesh-API export (no BMesh), skin import, Blender 4.5-aligned options, FBX-style File Browser panels. History: **[CHANGELOG.md](CHANGELOG.md)**. Remaining work: **[TODO.md](TODO.md)**.
+**Current version: 2.0.3** — Mesh-API export (no BMesh), skin import, Blender 4.5-aligned options, FBX-style File Browser panels. History: **[CHANGELOG.md](CHANGELOG.md)**. Agent brief / remaining work: **[agent.md](agent.md)**.
 
 **Project:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
 **Issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues  
-**License:** [GPL-3.0-or-later](https://www.gnu.org/licenses/gpl-3.0.html)
+**License:** [GPL-3.0-or-later](LICENSE)
 
 ## Install
 
@@ -29,7 +29,7 @@ Import **Transformations → Parenting** (default) recreates SketchUp-style grou
 
 Import/export of meshes, UVs, vertex colors, Principled materials, textures, cameras, lights, bind-pose armatures/skins (`instance_controller`), morph target geometries, and ZAE/KMZ archives. Mesh export uses Blender’s Mesh API only (no BMesh). Options match Blender 4.5 names in FBX-style collapsible panels.
 
-Full version history is in [CHANGELOG.md](CHANGELOG.md). Known gaps and local resource paths are in [TODO.md](TODO.md). Zip build, wheels, and test checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
+Full version history is in [CHANGELOG.md](CHANGELOG.md). Known gaps, local paths, and the Extensions update checklist are in [agent.md](agent.md). Zip build, wheels, and test checklist: [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Credits
 
