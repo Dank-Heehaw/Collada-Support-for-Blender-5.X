@@ -2,6 +2,22 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.2] — 2026-11-23
+
+Single installable release that combines skin import, export fidelity, Blender 4.5 operator alignment, a harder Blender 5 export crash fix, and an FBX-style export UI.
+
+**Crash.** Export still failed with `'BMLoopSeq' object has no attribute 'ensure_lookup_table'` after 2.0.1 when Blender kept old add-on code or a zip still contained `loops.ensure_lookup_table`. 2.0.2 never calls `ensure_lookup_table` on loops: only `verts` / `edges` / `faces`, only if that method exists and is callable, and never if the sequence type name contains `Loop`. Loop data is read by iterating `face.loops` / `b_mesh.loops`.
+
+**UI.** Export (and import) File Browser options use collapsible sections like the FBX exporter (`layout.panel`: Include, Transform, Geometry, Armature, Animation, Extra) instead of a cramped Main/Geom/Arm/Anim/Extra tab row. All previous properties are still present.
+
+**Also in this zip**
+
+- **[#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) skin import:** `<instance_controller>` / `<skin>` meshes import as bind-pose geometry plus an Armature and weights (not an Empty joint tree)
+- **2.0.0 export fidelity:** per-loop normals, vertex colors, named nodes, modifiers, triangulate, texture copy, bind-pose skin export, XML declaration, A_ONE transparency (Google Earth no longer treats the diffuse map as opacity)
+- **2.0.1 original COLLADA alignment:** native 4.5 operator names/defaults, IDs, bind-shape matrices, morph target geometries
+
+**Install:** remove the old add-on first (**Preferences → Add-ons → Collada Support → Remove**), then **Install from Disk** `dist/blender_collada_support.zip`. Overwriting a previous zip in place can leave 2.0.0/2.0.1 code loaded.
+
 ## [2.0.1] — 2026-11-23
 
 Crash fix plus export/import alignment with Blender 4.5’s original C++ COLLADA operator (`io_collada.cc` / `source/blender/io/collada`).
@@ -161,6 +177,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[2.0.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.2
 [2.0.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.1
 [1.2.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.2
 [1.2.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.1

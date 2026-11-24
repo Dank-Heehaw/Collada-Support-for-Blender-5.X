@@ -13,7 +13,8 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | **1.5.0** | Armature + skin **export** (bind-pose slice also ships in **2.0.0**) |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
 | **2.0.0** | Native-style export options (Main/Geom/Arm/Extra), static scene parity, bind-pose skin export |
-| **2.0.1** (current) | Blender 5 `BMLoopSeq` crash fix; operator/ID/skin/morph semantics matched to the 4.5 C++ exporter |
+| **2.0.1** | Blender 5 `BMLoopSeq` crash fix; operator/ID/skin/morph semantics matched to the 4.5 C++ exporter |
+| **2.0.2** (current) | Combined release: #3 skin import + export fidelity + 4.5 alignment + BMLoopSeq crash fix + FBX-style collapsible export UI |
 
 ### Export options in **2.0.1**
 

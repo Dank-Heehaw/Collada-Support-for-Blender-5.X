@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (2, 0, 1),
+    "version": (2, 0, 2),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -68,6 +68,19 @@ def _refresh_collada_status():
 HAS_COLLADA = False
 COLLADA_IMPORT_ERROR = None
 _refresh_collada_status()
+
+
+def _operator_panel(layout, idname, title, default_closed=False):
+    """Collapsible File Browser section (FBX/glTF style). Falls back to a box."""
+    panel = getattr(layout, "panel", None)
+    if callable(panel):
+        header, body = panel(idname, default_closed=default_closed)
+        if header is not None:
+            header.label(text=title)
+        return body
+    box = layout.box()
+    box.label(text=title)
+    return box
 
 # Reload I/O modules only when pycollada is available (they import it at top level).
 if _ADDON_RELOAD and HAS_COLLADA:
@@ -163,22 +176,22 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
+        layout.use_property_decorate = False
 
-        box = layout.box()
-        box.label(text="Import Data Options")
-        box.prop(self, "import_units")
-        box.prop(self, "custom_normals")
-        box.prop(self, "transformation")
-        box.prop(self, "recognize_blender_extensions")
+        data = _operator_panel(layout, "COLLADA_import_data", "Include")
+        if data:
+            data.prop(self, "import_units")
+            data.prop(self, "custom_normals")
+            data.prop(self, "transformation")
+            data.prop(self, "recognize_blender_extensions")
 
-        box = layout.box()
-        box.label(text="Armature Options")
-        box.prop(self, "fix_orientation")
-        box.prop(self, "find_chains")
-        box.prop(self, "auto_connect")
-        box.prop(self, "min_chain_length")
-
-        layout.prop(self, "keep_bind_info")
+        arm = _operator_panel(layout, "COLLADA_import_armature", "Armature")
+        if arm:
+            arm.prop(self, "fix_orientation")
+            arm.prop(self, "find_chains")
+            arm.prop(self, "auto_connect")
+            arm.prop(self, "min_chain_length")
+            arm.prop(self, "keep_bind_info")
 
     def execute(self, context):
         if not _refresh_collada_status():
@@ -209,9 +222,10 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
     directory: StringProperty(subtype="DIR_PATH")
 
     # Property names/defaults match WM_OT_collada_export in Blender 4.5 io_collada.cc.
+    # Kept hidden so old operator presets still load; UI uses collapsible panels.
     prop_bc_export_ui_section: EnumProperty(
         name="Export Section",
-        description="Only for User Interface organization",
+        description="Unused; export options use collapsible panels instead of tabs",
         items=(
             ("main", "Main", "Data export section"),
             ("geometry", "Geom", "Geometry export section"),
@@ -220,6 +234,7 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
             ("collada", "Extra", "Collada export section"),
         ),
         default="main",
+        options={"HIDDEN"},
     )
     selected: BoolProperty(
         name="Selection Only",
@@ -372,8 +387,8 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         name="Transform",
         description=(
             "Transformation type for translation, scale and rotation. "
-            "Note: The Animation transformation type in the Anim Tab "
-            "is always equal to the Object transformation type in the Geom tab"
+            "Note: The Animation transformation type is always equal to the "
+            "Object transformation type in Geometry"
         ),
         items=(
             ("matrix", "Matrix", "Use <matrix> representation for exported transformations"),
@@ -440,53 +455,47 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
-        layout.prop(self, "prop_bc_export_ui_section", expand=True)
-        section = self.prop_bc_export_ui_section
+        layout.use_property_decorate = False
 
-        if section == "main":
-            box = layout.box()
-            box.label(text="Main")
-            col = box.column(align=True)
+        include = _operator_panel(layout, "COLLADA_export_include", "Include")
+        if include:
+            col = include.column(heading="Limit to", align=True)
             col.prop(self, "selected")
             sub = col.column(align=True)
             sub.enabled = self.selected
             sub.prop(self, "include_children")
             sub.prop(self, "include_armatures")
-            col.prop(self, "include_shapekeys")
+            include.prop(self, "include_shapekeys")
 
-            box = layout.box()
-            box.label(text="Global Orientation")
-            box.prop(self, "apply_global_orientation", text="Apply")
-            box.prop(self, "export_global_forward_selection", text="Forward Axis")
-            box.prop(self, "export_global_up_selection", text="Up Axis")
+        transform = _operator_panel(layout, "COLLADA_export_transform", "Transform")
+        if transform:
+            transform.prop(self, "apply_global_orientation")
+            transform.prop(self, "export_global_forward_selection")
+            transform.prop(self, "export_global_up_selection")
+            transform.prop(self, "export_object_transformation_type_selection")
 
-            box = layout.box()
-            box.label(text="Texture Options")
-            box.prop(self, "use_texture_copies")
-            box.prop(self, "active_uv_only")
-
-        elif section == "geometry":
-            box = layout.box()
-            box.label(text="Export Data Options")
-            box.prop(self, "triangulate")
-            row = box.row(align=True)
+        geom = _operator_panel(layout, "COLLADA_export_geometry", "Geometry")
+        if geom:
+            geom.prop(self, "triangulate")
+            row = geom.row(heading="Modifiers", align=True)
             row.prop(self, "apply_modifiers", text="")
             sub = row.row(align=True)
             sub.enabled = self.apply_modifiers
             sub.prop(self, "export_mesh_type_selection", text="")
-            box.prop(self, "export_object_transformation_type_selection")
+            geom.prop(self, "use_object_instantiation")
 
-        elif section == "armature":
-            box = layout.box()
-            box.label(text="Armature")
-            box.prop(self, "deform_bones_only")
-            box.prop(self, "open_sim")
+        arm = _operator_panel(
+            layout, "COLLADA_export_armature", "Armature", default_closed=True
+        )
+        if arm:
+            arm.prop(self, "deform_bones_only")
 
-        elif section == "animation":
-            box = layout.box()
-            box.label(text="Animation")
-            box.prop(self, "include_animations")
-            col = box.column(align=True)
+        anim = _operator_panel(
+            layout, "COLLADA_export_animation", "Animation", default_closed=True
+        )
+        if anim:
+            anim.prop(self, "include_animations")
+            col = anim.column(align=True)
             col.enabled = self.include_animations
             col.prop(self, "export_animation_type_selection", expand=True)
             col.prop(self, "export_animation_transformation_type_selection")
@@ -501,16 +510,17 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
             col.prop(self, "include_all_actions")
             col.prop(self, "keep_smooth_curves")
 
-        else:
-            box = layout.box()
-            box.label(text="Collada Options")
-            box.prop(self, "use_object_instantiation")
-            box.prop(self, "use_blender_profile")
-            box.prop(self, "sort_by_name")
-            box.prop(self, "keep_bind_info")
-            box.prop(self, "limit_precision")
-            box.prop(self, "collada_version")
-            box.prop(self, "export_as")
+        extra = _operator_panel(layout, "COLLADA_export_extra", "Extra")
+        if extra:
+            extra.prop(self, "use_texture_copies")
+            extra.prop(self, "active_uv_only")
+            extra.prop(self, "use_blender_profile")
+            extra.prop(self, "open_sim")
+            extra.prop(self, "sort_by_name")
+            extra.prop(self, "keep_bind_info")
+            extra.prop(self, "limit_precision")
+            extra.prop(self, "collada_version")
+            extra.prop(self, "export_as")
 
     def check(self, context):
         out_ext = ".zae" if self.export_as == "zae" else ".dae"

@@ -227,14 +227,36 @@ def idurl(uid) :
     return "#" + uid
 #end idurl
 
+_BMESH_LOOKUP_SEQ_NAMES = ("verts", "edges", "faces")
+
+def _bmesh_seq_ensure_lookup(seq) :
+    "Call ensure_lookup_table only on verts/edges/faces. Never on BMLoopSeq."
+    if seq is None :
+        return
+    #end if
+    typename = type(seq).__name__
+    if "Loop" in typename :
+        return
+    #end if
+    ensure = getattr(seq, "ensure_lookup_table", None)
+    if not callable(ensure) :
+        return
+    #end if
+    try :
+        ensure()
+    except AttributeError :
+        pass
+    #end try
+#end _bmesh_seq_ensure_lookup
+
 def _bmesh_ensure_lookup_tables(bm) :
-    "Ensure bmesh index tables. Never call this on loops: BMLoopSeq has no"
-    " ensure_lookup_table in Blender 5 (verts/edges/faces do in some versions)."
-    for seq in (bm.verts, bm.edges, bm.faces) :
-        ensure = getattr(seq, "ensure_lookup_table", None)
-        if callable(ensure) :
-            ensure()
-        #end if
+    "Ensure bmesh index tables for verts/edges/faces only. BMLoopSeq in"
+    " Blender 5 has no ensure_lookup_table — never pass bm.loops or face.loops."
+    if bm is None :
+        return
+    #end if
+    for name in _BMESH_LOOKUP_SEQ_NAMES :
+        _bmesh_seq_ensure_lookup(getattr(bm, name, None))
     #end for
 #end _bmesh_ensure_lookup_tables
 
@@ -583,7 +605,7 @@ class ColladaExport :
         self._collada.assetInfo.upaxis = "Z_UP"
         try :
             self._collada.assetInfo.contributors[0].authoring_tool = \
-                "Blender %s Collada Support 2.0.1" % bpy.app.version_string
+                "Blender %s Collada Support 2.0.2" % bpy.app.version_string
         except Exception :
             pass
         #end try

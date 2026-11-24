@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `2.0.1` |
+| Version | `2.0.2` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.1.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.2.md`
 
 ---
 
@@ -151,16 +151,17 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (2.0.1)
+## Quick paste — Release notes (2.0.2)
 
 ```markdown
-# Collada Support 2.0.1
+# Collada Support 2.0.2
 
 ## Changes
 
-- **Crash fix:** COLLADA export no longer calls `ensure_lookup_table` on bmesh loops (`BMLoopSeq` has no such method in Blender 5). Lookup tables are ensured only on verts/edges/faces when those APIs exist.
-- **Original Blender 4.5 COLLADA alignment:** export operator options, defaults, and Main/Geom/Arm/Anim/Extra UI match `WM_OT_collada_export`. Mesh/normal/UV/color sources, material symbols, texture copy, named nodes, armatures/skins, bind-shape matrices, and morph target geometries follow the C++ exporter semantics.
-- **Import:** native option names (`import_units`, `custom_normals`, armature flags) and mesh/material names from COLLADA `name` / `-mesh` suffixes.
+- **Crash fix:** Blender 5 export no longer calls `ensure_lookup_table` on bmesh loops (`BMLoopSeq` has no such method). Lookup tables are ensured only on verts/edges/faces when that API exists and is callable. **Remove the old add-on first**, then Install from Disk — overwriting a previous zip can leave 2.0.0/2.0.1 code loaded.
+- **Export UI:** File Browser options use FBX-style collapsible sections (Include, Transform, Geometry, Armature, Animation, Extra) instead of cramped Main/Geom/Arm/Anim/Extra tabs.
+- **Skin import (#3):** `<instance_controller>` / `<skin>` meshes import as bind-pose geometry plus an Armature and weights.
+- **Export fidelity + original Blender 4.5 COLLADA alignment:** native operator options/defaults, IDs, skins, morph targets, XML declaration, A_ONE transparency (Google Earth), triangulate.
 
 Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
@@ -173,7 +174,8 @@ Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → D
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_2.0.1.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.2.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.1.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_2.0.0.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.0.md     ← earlier notes (kept for reference)
