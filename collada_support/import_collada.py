@@ -500,14 +500,29 @@ class ColladaImport :
         basename = os.path.basename(filepath)
         self._ctx = ctx
         self._collada = collada
-        self._recognize_blender_extensions = kwargs["recognize_blender_extensions"]
-        self._transformation = kwargs["transformation"]
+        self._recognize_blender_extensions = kwargs.get("recognize_blender_extensions", True)
+        self._transformation = kwargs.get("transformation", "PARENT")
+        self._import_units = bool(kwargs.get("import_units", False))
+        self._custom_normals = bool(kwargs.get("custom_normals", True))
         self._name_map = {}
         self._name_revmap = {}
         self._untitledcount = 0
-        self._units = collada.assetInfo.unitmeter
-        if self._units == None :
-            self._units = 1
+        file_meter = collada.assetInfo.unitmeter
+        if file_meter == None :
+            file_meter = 1
+        #end if
+        blender_scale = float(getattr(ctx.scene.unit_settings, "scale_length", 1.0) or 1.0)
+        if self._import_units :
+            # Native: apply the file's unit scale to the Blender scene.
+            try :
+                ctx.scene.unit_settings.scale_length = float(file_meter)
+            except Exception :
+                pass
+            #end try
+            self._units = 1.0
+        else :
+            # Match import to Blender's current unit settings.
+            self._units = float(file_meter) / blender_scale
         #end if
         orient = collada.assetInfo.upaxis
         if orient == "Z_UP" :
@@ -610,9 +625,18 @@ class ColladaImport :
         #end truncate_bytes
 
     #begin name
-        # Prefer COLLADA name for Empties/groups (SketchUp), otherwise id.
+        # Native MeshImporter::bc_get_dae_name: name if present, else original id.
         label = collada_label(obj)
+        native_suffix = \
+            {
+                DATABLOCK.MESH : "-mesh",
+                DATABLOCK.MATERIAL : "-material",
+                DATABLOCK.CAMERA : "-camera",
+                DATABLOCK.LAMP : "-light",
+            }.get(prefix_name)
         if prefix_name == DATABLOCK.EMPTY and label :
+            origname = label
+        elif label and prefix_name in (DATABLOCK.MESH, DATABLOCK.MATERIAL, DATABLOCK.CAMERA, DATABLOCK.LAMP) :
             origname = label
         elif hasattr(obj, "id") and obj.id != None :
             origname = obj.id
@@ -621,6 +645,9 @@ class ColladaImport :
                 if prefix != None and origname.startswith(prefix) :
                     origname = origname[len(prefix):]
                 #end if
+            #end if
+            if native_suffix and origname.endswith(native_suffix) :
+                origname = origname[:-len(native_suffix)]
             #end if
         elif label :
             origname = label
@@ -954,7 +981,7 @@ class ColladaImport :
             colorcoord_ids = None
             # Large meshes: skip O(faces*corners) flat-shade probes (native
             # importer either uses custom normals or leaves shading alone).
-            detect_smooth = True
+            detect_smooth = bool(self._custom_normals)
             for p in primitives :
                 if isinstance(p, BoundPrimitive) :
                     b_mat_key = p.original.material

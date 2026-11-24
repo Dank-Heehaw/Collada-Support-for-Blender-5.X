@@ -84,11 +84,11 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 
 **Fixed in 1.1.0 (static correctness):** multi-material export indices, empty material slots, selection-only export with unselected parents, atomic DAE/ZAE write, ortho camera scale, scene unit export, and surfaced pycollada parse warnings.
 
-**2.0.0 export fidelity:** per-loop normals, vertex colors, named nodes, Apply Modifiers / Triangulate / Texture Copy, Include Children/Armatures/Shape Keys, and bind-pose armature/skin export.
+**2.0.1 export:** crash-safe bmesh lookup tables; native 4.5 operator names/defaults; native-style IDs, skins, morph targets, and texture copy.
 
 **Still pending:**
 
-- Skin **animation** and morph / shape-key **library** I/O (see roadmap)
+- Skin **animation** libraries (export options exist; sampled/key channels not yet written)
 - Custom split-normal attributes beyond smooth vs flat faces
 - Very large files remain CPU-bound during XML parse (pycollada)
 - Nested ZAE sub-archives are not supported
@@ -106,7 +106,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **2.0.0**)
+- Add-on version (currently **2.0.1**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output

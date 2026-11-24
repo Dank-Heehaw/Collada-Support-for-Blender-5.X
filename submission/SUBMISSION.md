@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `2.0.0` |
+| Version | `2.0.1` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.0.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.1.md`
 
 ---
 
@@ -151,17 +151,16 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (2.0.0)
+## Quick paste — Release notes (2.0.1)
 
 ```markdown
-# Collada Support 2.0.0
+# Collada Support 2.0.1
 
 ## Changes
 
-- **Export fidelity** toward Blender 4.5 native COLLADA: per-loop normals, vertex colors, named object nodes, modifier evaluation, triangulate, texture copy, and native-style Main/Geom/Arm/Extra options.
-- **Skin export:** armatures as JOINT nodes, bind-pose `<skin>` controllers, inverse bind matrices, and vertex weights.
-- **Materials:** XML declaration; do not reuse the diffuse map as `<transparent>`; lambert effects no longer emit phong-only children.
-- **Import:** vertex color layers (COLOR) round-trip with export.
+- **Crash fix:** COLLADA export no longer calls `ensure_lookup_table` on bmesh loops (`BMLoopSeq` has no such method in Blender 5). Lookup tables are ensured only on verts/edges/faces when those APIs exist.
+- **Original Blender 4.5 COLLADA alignment:** export operator options, defaults, and Main/Geom/Arm/Anim/Extra UI match `WM_OT_collada_export`. Mesh/normal/UV/color sources, material symbols, texture copy, named nodes, armatures/skins, bind-shape matrices, and morph target geometries follow the C++ exporter semantics.
+- **Import:** native option names (`import_units`, `custom_normals`, armature flags) and mesh/material names from COLLADA `name` / `-mesh` suffixes.
 
 Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
@@ -174,7 +173,8 @@ Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → D
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_2.0.0.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.1.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.0.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.0.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.1.3.md     ← earlier notes (kept for reference)
