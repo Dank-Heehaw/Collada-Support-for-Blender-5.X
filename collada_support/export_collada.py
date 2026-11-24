@@ -18,12 +18,106 @@ from collada.geometry import Geometry
 from collada.light import DirectionalLight, PointLight, SpotLight
 from collada.material import CImage, Effect, Map, Material, Sampler2D, Surface
 from collada.scene import Node, Scene
-from collada.scene import CameraNode, GeometryNode, LightNode, MaterialNode
+from collada.scene import CameraNode, ControllerNode, GeometryNode, LightNode, MaterialNode
 from collada.scene import MatrixTransform
 from collada.source import FloatSource, InputList
 from collada.xmlutil import etree as ElementTree
 
 DEG = math.pi / 180 # angle unit conversion factor
+
+XML_DECLARATION = b'<?xml version="1.0" encoding="utf-8"?>\n'
+  # pycollada Collada.write() emits the root with no declaration.
+  # Native Blender COLLADA always wrote one; several readers require it.
+
+# profile_COMMON: children allowed inside each shader (COLLADA 1.4.1).
+# pycollada Effect.__init__ fills specular/shininess/transparent with defaults
+# and Effect.save() writes every non-None supported property into the shader.
+PROFILE_COMMON_SHADER_PROPS = \
+    {
+        "constant" : frozenset
+          ((
+            "emission", "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "lambert" : frozenset
+          ((
+            "emission", "ambient", "diffuse",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "phong" : frozenset
+          ((
+            "emission", "ambient", "diffuse", "specular", "shininess",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+        "blinn" : frozenset
+          ((
+            "emission", "ambient", "diffuse", "specular", "shininess",
+            "reflective", "reflectivity",
+            "transparent", "transparency", "index_of_refraction",
+          )),
+    }
+
+OPAQUE_WHITE = (1.0, 1.0, 1.0, 1.0)
+  # A_ONE <transparent> color: opacity comes from <transparency>, not a texture.
+
+MESH_CONVERT_TYPES = frozenset(("MESH", "CURVE", "SURFACE", "META", "FONT"))
+
+def ensure_xml_declaration(data) :
+    "Prefix an XML declaration when pycollada omitted it."
+    if isinstance(data, str) :
+        data = data.encode("utf-8")
+    #end if
+    if data.lstrip().startswith(b"<?xml") :
+        return data
+    #end if
+    return XML_DECLARATION + data
+#end ensure_xml_declaration
+
+def sanitize_effect(effect, shader, explicit_props) :
+    "Drop pycollada defaults and properties illegal for this shader."
+    allowed = PROFILE_COMMON_SHADER_PROPS.get(shader)
+    if allowed is None :
+        return
+    #end if
+    for prop in Effect.supported :
+        value = getattr(effect, prop, None)
+        if value is None :
+            continue
+        #end if
+        if prop not in allowed :
+            setattr(effect, prop, None)
+            continue
+        #end if
+        if prop in explicit_props :
+            continue
+        #end if
+        if prop in ("specular", "ambient", "emission", "reflective", "transparent") :
+            if isinstance(value, (tuple, list)) and all(float(c) == 0.0 for c in value[:3]) :
+                setattr(effect, prop, None)
+            #end if
+        elif prop in ("shininess", "reflectivity") and float(value) == 0.0 :
+            setattr(effect, prop, None)
+        #end if
+    #end for
+#end sanitize_effect
+
+class _SkinControllerExport :
+    "Minimal pycollada controller stand-in; Skin.save() is not implemented."
+
+    def __init__(self, id, xmlnode) :
+        self.id = id
+        self.xmlnode = xmlnode
+    #end __init__
+
+    def save(self) :
+        if self.xmlnode is not None :
+            self.xmlnode.set("id", self.id)
+        #end if
+    #end save
+
+#end _SkinControllerExport
 
 XML_NCNAMESTART_CHARS = \
     r"\u0041-\u005A\u005F\u0061-\u007A\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF" \
@@ -39,11 +133,13 @@ class DATABLOCK(enum.Enum) :
     # Note on uniqueness of IDs: Blender’s datablock names have to be
     # unique among datablocks of the same type, so these can be used as
     # IDs in XML, with a different prefix for each datablock type.
+    ARMATURE = "AR"
     CAMERA = "CA"
     EMPTY = "EM" # actually there is no type-specific datablock for these
     LAMP = "LA"
     MATERIAL = "MA"
     MESH = "ME"
+    OBJECT = "OB"
     SCENE = "SCE"
     INTERNAL_ID = "IID" # for things which have no names in Blender
 
@@ -105,6 +201,34 @@ class EXT_FILE(enum.Enum) :
 def idurl(uid) :
     return "#" + uid
 #end idurl
+
+def _armature_object(b_obj) :
+    "Armature Object driving this mesh, if any."
+    if b_obj is None :
+        return None
+    #end if
+    if b_obj.type == "ARMATURE" :
+        return b_obj
+    #end if
+    parent = b_obj.parent
+    if parent is not None and parent.type == "ARMATURE" and b_obj.parent_type in ("ARMATURE", "BONE") :
+        return parent
+    #end if
+    for mod in getattr(b_obj, "modifiers", []) :
+        if getattr(mod, "type", None) == "ARMATURE" and getattr(mod, "object", None) is not None :
+            return mod.object
+        #end if
+    #end for
+    return None
+#end _armature_object
+
+def _fmt_floats(values, precision = None) :
+    if precision is None :
+        return " ".join(str(float(v)) for v in values)
+    #end if
+    fmt = "%%.%df" % precision
+    return " ".join(fmt % float(v) for v in values)
+#end _fmt_floats
 
 class ColladaExport :
 
@@ -176,6 +300,7 @@ class ColladaExport :
             raise
         #end try
         self._up_axis = kwargs["up_axis"]
+        self._apply_global_orientation = bool(kwargs.get("apply_global_orientation", False))
         if self._up_axis == "Z_UP" :
             self._orient = Matrix.Identity(4)
         elif self._up_axis == "X_UP" :
@@ -184,22 +309,53 @@ class ColladaExport :
             self._orient = Matrix.Rotation(- 90 * DEG, 4, "X")
         #end if
         self._selected_only = kwargs["use_selection"]
-        # Selection-only: include selected objects plus descendants of selected
-        # roots. Selected objects whose parent is unselected are still exported
-        # (as export roots), matching Blender 4.5 spirit.
+        self._include_children = bool(kwargs.get("include_children", False))
+        self._include_armatures = bool(kwargs.get("include_armatures", False))
+        self._include_shapekeys = bool(kwargs.get("include_shapekeys", False))
+        self._apply_modifiers = bool(kwargs.get("apply_modifiers", False))
+        self._triangulate = bool(kwargs.get("triangulate", True))
+        self._active_uv_only = bool(kwargs.get("active_uv_only", False))
+        self._use_object_instantiation = bool(kwargs.get("use_object_instantiation", True))
+        self._deform_bones_only = bool(kwargs.get("deform_bones_only", False))
+        self._export_custom_props = bool(kwargs.get("export_custom_properties", True))
+        # Selection-only: selected objects whose parent is unselected are still
+        # exported as roots (1.1.0 / Blender 4.5). Include Children / Include
+        # Armatures match the native exporter Main panel (both default off).
         if self._selected_only :
-            export_names = set()
-            selected = [o for o in objects if o.select_get()]
-            for obj in selected :
-                export_names.add(obj.name)
-                # Descendants of selected roots
-                stack = list(obj.children)
+            export_names = set(o.name for o in objects if o.select_get())
+            if self._include_children :
+                stack = []
+                for obj in objects :
+                    if obj.name in export_names :
+                        stack.extend(obj.children)
+                    #end if
+                #end for
                 while stack :
                     child = stack.pop()
-                    export_names.add(child.name)
-                    stack.extend(child.children)
+                    if child.name not in export_names :
+                        export_names.add(child.name)
+                        stack.extend(child.children)
+                    #end if
                 #end while
-            #end for
+                # Native: select armature + Include Children also pulls rigged meshes.
+                for obj in objects :
+                    arm = _armature_object(obj)
+                    if arm is not None and arm.name in export_names :
+                        export_names.add(obj.name)
+                    #end if
+                #end for
+            #end if
+            if self._include_armatures :
+                for obj in list(objects) :
+                    if obj.name not in export_names :
+                        continue
+                    #end if
+                    arm = _armature_object(obj)
+                    if arm is not None :
+                        export_names.add(arm.name)
+                    #end if
+                #end for
+            #end if
             self._export_names = export_names
             export_objects = [o for o in objects if o.name in export_names]
         else :
@@ -227,6 +383,14 @@ class ColladaExport :
         self._obj_children = obj_children
         self._geometries = {}
         self._materials = {}
+        self._armature_ids = {}
+        self._skin_controllers = {}
+        self._temp_meshes = []
+        for obj in export_objects :
+            if obj.type == "ARMATURE" :
+                self._armature_ids[obj.name] = DATABLOCK.ARMATURE.nameid(obj.name)
+            #end if
+        #end for
         self._collada = Collada()
         self._collada.xmlnode.getroot().set("version", kwargs["collada_version"])
         # Scene units from Blender (Blender unit = scale_length metres).
@@ -274,6 +438,7 @@ class ColladaExport :
                 pass
             #end try
         #end if
+        self._free_temp_meshes()
     #end abort_temp
 
     def write_ext_file(self, category, obj_name, filename, contents) :
@@ -316,13 +481,33 @@ class ColladaExport :
         return out_filename
     #end write_ext_file
 
+    def collada_bytes(self) :
+        buf = io.BytesIO()
+        self._collada.write(buf)
+        return ensure_xml_declaration(buf.getvalue())
+    #end collada_bytes
+
+    def _free_temp_meshes(self) :
+        meshes = getattr(self, "_temp_meshes", None)
+        if not meshes :
+            return
+        #end if
+        for mesh in meshes :
+            try :
+                bpy.data.meshes.remove(mesh)
+            except Exception :
+                pass
+            #end try
+        #end for
+        self._temp_meshes = []
+    #end _free_temp_meshes
+
     def save(self) :
         try :
+            dae_bytes = self.collada_bytes()
             if self._is_zae :
                 item = self._zipattr.new_item(self._zipattr.scene_name)
-                dae = io.BytesIO()
-                self._collada.write(dae)
-                self._zip.writestr(item, dae.getvalue())
+                self._zip.writestr(item, dae_bytes)
                 manifest = ElementTree.Element("dae_root")
                 manifest.text = self._zipattr.scene_name
                 item = self._zipattr.new_item("manifest.xml")
@@ -330,12 +515,16 @@ class ColladaExport :
                 self._zip.close()
                 self._zip = None
             else :
-                self._collada.write(self._temp_filepath)
+                out = open(self._temp_filepath, "wb")
+                out.write(dae_bytes)
+                out.close()
             #end if
             os.replace(self._temp_filepath, self._filepath)
         except Exception :
             self.abort_temp()
             raise
+        finally :
+            self._free_temp_meshes()
         #end try
     #end save
 
@@ -379,16 +568,60 @@ class ColladaExport :
         return DATABLOCK.INTERNAL_ID.nameid("%0.5d" % self._id_seq)
     #end next_internal_id
 
-    def node(self, b_matrix = None) :
-        node = Node(id = None, xmlnode = E.node())
-          # construct my own xmlnode to avoid setting an id or name
-          # (should be optional according to Collada spec)
+    def node(self, b_matrix = None, b_obj = None) :
+        # Native exporter names visual-scene nodes after the Blender object so
+        # hierarchy and object identity survive round-trip. Anonymous nodes
+        # used to drop those names on re-import.
+        if b_obj is not None :
+            node_id = DATABLOCK.OBJECT.nameid(b_obj.name)
+            xml = E.node(id = node_id, name = b_obj.name)
+            node = Node(id = node_id, name = b_obj.name, xmlnode = xml)
+        else :
+            node = Node(id = None, xmlnode = E.node())
+        #end if
         if b_matrix != None :
             node.transforms.append(self.matrix(b_matrix))
         #end if
         node.save()
         return node
     #end node
+
+    def _export_object_extras(self, node, b_obj) :
+        if not self._add_blender_extensions or not self._export_custom_props :
+            return
+        #end if
+        keys = [k for k in b_obj.keys() if not k.startswith("_")]
+        if not keys :
+            return
+        #end if
+        blendstuff = self.blender_technique(True, node)
+        if blendstuff is None :
+            return
+        #end if
+        props = E.custom_properties()
+        for key in keys :
+            try :
+                value = b_obj[key]
+            except Exception :
+                continue
+            #end try
+            if hasattr(value, "to_list") :
+                try :
+                    value = value.to_list()
+                except Exception :
+                    pass
+                #end try
+            #end if
+            text = str(value)
+            if len(text) > 512 :
+                text = text[:512]
+            #end if
+            props.append(E.property(text, name = str(key)))
+        #end for
+        if len(props) :
+            blendstuff.append(props)
+        #end if
+    #end _export_object_extras
 
     def obj_camera(self, b_obj) :
         result = []
@@ -531,9 +764,93 @@ class ColladaExport :
     #end obj_light
 
     def obj_empty(self, b_obj) :
-        result = Node(id = DATABLOCK.EMPTY.nameid(b_obj.name))
+        result = Node(id = DATABLOCK.EMPTY.nameid(b_obj.name), name = b_obj.name)
         return [result]
     #end obj_empty
+
+    def _will_export_skin(self, b_obj) :
+        if b_obj.type != "MESH" :
+            return False
+        #end if
+        arm = _armature_object(b_obj)
+        if arm is None or not b_obj.vertex_groups :
+            return False
+        #end if
+        if self._export_names is not None and arm.name not in self._export_names :
+            return False
+        #end if
+        return True
+    #end _will_export_skin
+
+    def _object_to_bmesh(self, b_obj) :
+        "Build a bmesh for export: modifiers, shapekeys, curve conversion, triangulate."
+        will_skin = self._will_export_skin(b_obj)
+        need_eval = (
+            b_obj.type != "MESH"
+            or self._apply_modifiers
+            or self._include_shapekeys
+        )
+        muted = []
+        b_mesh = bmesh.new()
+        src_mesh = None
+        created = False
+        try :
+            if need_eval :
+                for mod in getattr(b_obj, "modifiers", []) :
+                    # Rest-pose skin: do not bake Armature deformation into the mesh.
+                    mute = (will_skin and mod.type == "ARMATURE") or (
+                        not self._apply_modifiers and mod.type != "ARMATURE"
+                    )
+                    if mute and getattr(mod, "show_viewport", False) :
+                        mod.show_viewport = False
+                        muted.append(mod)
+                    #end if
+                #end for
+                if muted :
+                    bpy.context.view_layer.update()
+                #end if
+                depsgraph = bpy.context.evaluated_depsgraph_get()
+                eval_obj = b_obj.evaluated_get(depsgraph)
+                try :
+                    src_mesh = bpy.data.meshes.new_from_object \
+                      (
+                        eval_obj,
+                        preserve_all_data_layers = True,
+                        depsgraph = depsgraph,
+                      )
+                    created = True
+                except Exception :
+                    src_mesh = getattr(b_obj, "data", None) if b_obj.type == "MESH" else None
+                    created = False
+                #end try
+            elif b_obj.type == "MESH" :
+                src_mesh = b_obj.data
+            #end if
+            if src_mesh is None :
+                return b_mesh
+            #end if
+            b_mesh.from_mesh(src_mesh)
+            if self._triangulate and b_mesh.faces :
+                bmesh.ops.triangulate(b_mesh, faces = list(b_mesh.faces))
+            #end if
+        finally :
+            for mod in muted :
+                try :
+                    mod.show_viewport = True
+                except Exception :
+                    pass
+                #end try
+            #end for
+            if created and src_mesh is not None :
+                try :
+                    bpy.data.meshes.remove(src_mesh)
+                except Exception :
+                    pass
+                #end try
+            #end if
+        #end try
+        return b_mesh
+    #end _object_to_bmesh
 
     def obj_mesh(self, b_obj) :
 
@@ -542,6 +859,22 @@ class ColladaExport :
             return "slot%.3d" % slotindex
         #end make_slotname
 
+        def unique_normal_index(store, vec) :
+            if vec.length_squared < 1e-16 :
+                vec = Vector((0.0, 0.0, 1.0))
+            else :
+                vec = vec.normalized()
+            #end if
+            key = (round(vec.x, 6), round(vec.y, 6), round(vec.z, 6))
+            idx = store[0].get(key)
+            if idx is None :
+                idx = len(store[1])
+                store[0][key] = idx
+                store[1].append((float(vec.x), float(vec.y), float(vec.z)))
+            #end if
+            return idx
+        #end unique_normal_index
+
         def encode_mesh(b_mesh, b_mesh_name, b_material_slots) :
 
             def is_trimesh(faces) :
@@ -549,6 +882,9 @@ class ColladaExport :
             #end is_trimesh
 
         #begin encode_mesh
+            b_mesh.faces.ensure_lookup_table()
+            b_mesh.verts.ensure_lookup_table()
+            b_mesh.loops.ensure_lookup_table()
             mesh_name = DATABLOCK.MESH.nameid(b_mesh_name)
             sources = []
             vert_srcid = self.next_internal_id()
@@ -561,40 +897,97 @@ class ColladaExport :
                     components = ("X", "Y", "Z")
                   )
               )
+            # Native GeometryExporter: per-loop normals. VERTEX and NORMAL must
+            # use different offsets so flat faces keep a face normal instead of
+            # a single averaged vertex normal.
+            norm_store = ({}, [])
+            loop_norm_idx = [0] * len(b_mesh.loops)
+            for face in b_mesh.faces :
+                if face.smooth :
+                    for face_loop in face.loops :
+                        loop_norm_idx[face_loop.index] = unique_normal_index \
+                          (
+                            norm_store,
+                            Vector(face_loop.vert.normal),
+                          )
+                    #end for
+                else :
+                    ni = unique_normal_index(norm_store, Vector(face.normal))
+                    for face_loop in face.loops :
+                        loop_norm_idx[face_loop.index] = ni
+                    #end for
+                #end if
+            #end for
+            if not norm_store[1] :
+                norm_store[1].append((0.0, 0.0, 1.0))
+            #end if
             vnorm_srcid = self.next_internal_id()
             sources.append \
               (
                 FloatSource
                   (
                     id = vnorm_srcid,
-                    data = np.array([c for v in b_mesh.verts for c in v.normal]),
+                    data = np.array([c for n in norm_store[1] for c in n]),
                     components = ("X", "Y", "Z")
                   )
-              ) # todo: face normal might be different for flat shading
+              )
             uv_ids = []
+            uv_layers = list(b_mesh.loops.layers.uv.items())
             if b_mesh.loops.layers.uv.active != None :
                 active_uv_name = b_mesh.loops.layers.uv.active.name
             else :
                 active_uv_name = None
             #end if
-            for i, (b_uvname, uvlayer) in enumerate(b_mesh.loops.layers.uv.items()) :
+            if self._active_uv_only and active_uv_name is not None :
+                uv_layers = [(n, layer) for n, layer in uv_layers if n == active_uv_name]
+            #end if
+            nloops = len(b_mesh.loops)
+            for b_uvname, uvlayer in uv_layers :
                 uv_name = self.next_internal_id()
                 uv_ids.append((uv_name, b_uvname))
+                uv_data = [0.0] * (nloops * 2)
+                for loop in b_mesh.loops :
+                    uv = loop[uvlayer].uv
+                    uv_data[loop.index * 2] = float(uv[0])
+                    uv_data[loop.index * 2 + 1] = float(uv[1])
+                #end for
                 sources.append \
                   (
                     FloatSource
                       (
                         id = uv_name,
-                        data = np.array
-                          (
-                            [
-                                x
-                                for f in b_mesh.faces
-                                for l in f.loops
-                                for x in l[uvlayer].uv
-                            ]
-                          ),
+                        data = np.array(uv_data),
                         components = ("S", "T")
+                      )
+                  )
+            #end for
+            color_ids = []
+            color_layers = []
+            if hasattr(b_mesh.loops.layers, "float_color") :
+                color_layers.extend(b_mesh.loops.layers.float_color.items())
+            #end if
+            if hasattr(b_mesh.loops.layers, "color") :
+                color_layers.extend(b_mesh.loops.layers.color.items())
+            #end if
+            for b_colname, collayer in color_layers :
+                col_id = self.next_internal_id()
+                color_ids.append((col_id, b_colname))
+                col_data = [0.0] * (nloops * 4)
+                for loop in b_mesh.loops :
+                    col = loop[collayer]
+                    base = loop.index * 4
+                    col_data[base] = float(col[0])
+                    col_data[base + 1] = float(col[1])
+                    col_data[base + 2] = float(col[2])
+                    col_data[base + 3] = float(col[3]) if len(col) > 3 else 1.0
+                #end for
+                sources.append \
+                  (
+                    FloatSource
+                      (
+                        id = col_id,
+                        data = np.array(col_data),
+                        components = ("R", "G", "B", "A")
                       )
                   )
             #end for
@@ -604,6 +997,9 @@ class ColladaExport :
                 names = E.layer_names()
                 for u in uv_ids :
                     names.append(E.name(name = u[1], refid = u[0], type = "UV"))
+                #end for
+                for c in color_ids :
+                    names.append(E.name(name = c[1], refid = c[0], type = "COLOR"))
                 #end for
                 blendstuff.append(names)
             #end if
@@ -617,21 +1013,36 @@ class ColladaExport :
                         if f.material_index == slotindex
                     ]
                 if any(assigned) :
+                    # Native stride: VERTEX, NORMAL, then UV/COLOR sharing the
+                    # loop index (separate offsets when both UV and COLOR exist).
                     ilist = InputList()
                     ilist.addInput(0, "VERTEX", idurl(vert_srcid))
-                    ilist.addInput(0, "NORMAL", idurl(vnorm_srcid))
+                    ilist.addInput(1, "NORMAL", idurl(vnorm_srcid))
                     setnr = 0
                     for u in uv_ids :
                         setnr += 1
-                        ilist.addInput(1, "TEXCOORD", idurl(u[0]), (setnr, 0)[u[1] == active_uv_name])
-                        # always assign set 0 to active UV layer
+                        uv_set = 0 if (u[1] == active_uv_name or self._active_uv_only) else setnr
+                        ilist.addInput(2, "TEXCOORD", idurl(u[0]), uv_set)
                     #end for
-                    # Only faces assigned to this material slot (not all faces).
+                    color_offset = 3 if uv_ids else 2
+                    color_set = 0
+                    for c in color_ids :
+                        ilist.addInput(color_offset, "COLOR", idurl(c[0]), color_set)
+                        color_set += 1
+                    #end for
+                    extra_uv = bool(uv_ids)
+                    extra_color = bool(color_ids)
                     indices = []
                     for face in assigned :
                         for face_loop in face.loops :
-                            this_face = [face_loop.vert.index, face_loop.index]
-                            indices.extend(this_face)
+                            indices.append(face_loop.vert.index)
+                            indices.append(loop_norm_idx[face_loop.index])
+                            if extra_uv :
+                                indices.append(face_loop.index)
+                            #end if
+                            if extra_color :
+                                indices.append(face_loop.index)
+                            #end if
                         #end for
                     #end for
                     indices = np.array(indices)
@@ -650,14 +1061,18 @@ class ColladaExport :
         #end encode_mesh
 
     #begin obj_mesh
-        b_mesh_name = b_obj.data.name
+        b_mesh_name = getattr(b_obj.data, "name", b_obj.name)
         b_material_slots = b_obj.material_slots
-        b_mesh = bmesh.new()
-        geom = self._geometries.get(b_mesh_name, None)
+        geom_key = b_mesh_name
+        if self._apply_modifiers or not self._use_object_instantiation or b_obj.type != "MESH" :
+            geom_key = "%s|%s" % (b_obj.name, b_mesh_name)
+        #end if
+        geom = self._geometries.get(geom_key, None)
+        b_mesh = None
         if not geom :
-            b_mesh.from_mesh(b_obj.data)
-            geom = encode_mesh(b_mesh, b_mesh_name, b_material_slots)
-            self._geometries[b_mesh_name] = geom
+            b_mesh = self._object_to_bmesh(b_obj)
+            geom = encode_mesh(b_mesh, geom_key.replace("|", "-"), b_material_slots)
+            self._geometries[geom_key] = geom
         #end if
         matnodes = []
         for slotindex, slot in enumerate(b_material_slots) :
@@ -680,16 +1095,221 @@ class ColladaExport :
                   )
               )
         #end for
-        b_mesh.free()
+        skin = None
+        if self._will_export_skin(b_obj) :
+            if b_mesh is None :
+                b_mesh = self._object_to_bmesh(b_obj)
+            #end if
+            skin = self._make_skin_controller(b_obj, geom, b_mesh)
+        #end if
+        if b_mesh is not None :
+            b_mesh.free()
+        #end if
+        if skin is not None :
+            cnode = ControllerNode(skin, matnodes)
+            arm = _armature_object(b_obj)
+            skel_id = self._armature_ids.get(arm.name) if arm is not None else None
+            if skel_id :
+                skel = E.skeleton(idurl(skel_id))
+                cnode.xmlnode.insert(0, skel)
+            #end if
+            cnode.save()
+            return [cnode]
+        #end if
         return [GeometryNode(geom, matnodes)]
     #end obj_mesh
 
+    def obj_armature(self, b_obj) :
+        arm = b_obj.data
+        bone_nodes = {}
+        for bone in arm.bones :
+            if self._deform_bones_only and not bone.use_deform :
+                continue
+            #end if
+            nid = DATABLOCK.ARMATURE.nameid("%s_%s" % (b_obj.name, bone.name))
+            xml = E.node(id = nid, name = bone.name, sid = bone.name, type = "JOINT")
+            node = Node(id = nid, name = bone.name, xmlnode = xml)
+            node.transforms.append(self.matrix(bone.matrix_local))
+            node.save()
+            bone_nodes[bone.name] = node
+        #end for
+        roots = []
+        for bone in arm.bones :
+            node = bone_nodes.get(bone.name)
+            if node is None :
+                continue
+            #end if
+            if bone.parent is not None and bone.parent.name in bone_nodes :
+                bone_nodes[bone.parent.name].children.append(node)
+                bone_nodes[bone.parent.name].save()
+            else :
+                roots.append(node)
+            #end if
+        #end for
+        arm_id = DATABLOCK.ARMATURE.nameid(b_obj.name)
+        wrapper = Node(id = arm_id, name = b_obj.name)
+        for root in roots :
+            wrapper.children.append(root)
+        #end for
+        wrapper.save()
+        self._armature_ids[b_obj.name] = arm_id
+        return [wrapper]
+    #end obj_armature
+
+    def _make_skin_controller(self, b_obj, geom, b_mesh) :
+        arm_obj = _armature_object(b_obj)
+        if arm_obj is None or geom is None :
+            return None
+        #end if
+        bones = []
+        for bone in arm_obj.data.bones :
+            if self._deform_bones_only and not bone.use_deform :
+                continue
+            #end if
+            bones.append(bone)
+        #end for
+        if not bones :
+            return None
+        #end if
+        joint_names = [bone.name for bone in bones]
+        name_to_index = dict((n, i) for i, n in enumerate(joint_names))
+        inv_binds = []
+        mesh_world = b_obj.matrix_world
+        arm_world = arm_obj.matrix_world
+        for bone in bones :
+            rest = arm_world @ bone.matrix
+            try :
+                inv = rest.inverted() @ mesh_world
+            except ValueError :
+                inv = Matrix.Identity(4)
+            #end if
+            inv_binds.extend(e for r in tuple(map(tuple, inv)) for e in r)
+        #end for
+        b_mesh.verts.ensure_lookup_table()
+        nverts = len(b_mesh.verts)
+        if nverts == 0 :
+            return None
+        #end if
+        vcounts = []
+        v_indices = []
+        weights = []
+        # Map Blender vertex index → bmesh vert order (same as position source).
+        for vert in b_mesh.verts :
+            influences = []
+            for group in b_obj.vertex_groups :
+                jidx = name_to_index.get(group.name)
+                if jidx is None :
+                    continue
+                #end if
+                try :
+                    w = group.weight(vert.index)
+                except RuntimeError :
+                    w = 0.0
+                #end try
+                if w > 1e-8 :
+                    influences.append((jidx, w))
+                #end if
+            #end for
+            if not influences :
+                influences.append((0, 1.0))
+            #end if
+            total = sum(w for _j, w in influences) or 1.0
+            vcounts.append(len(influences))
+            for jidx, w in influences :
+                widx = len(weights)
+                weights.append(w / total)
+                v_indices.extend((jidx, widx))
+            #end for
+        #end for
+        ctl_id = DATABLOCK.MESH.nameid(b_obj.name + "-skin")
+        joints_id = ctl_id + "-joints"
+        binds_id = ctl_id + "-bind_poses"
+        weights_id = ctl_id + "-weights"
+        joints_src = E.source \
+          (
+            E.Name_array(" ".join(joint_names), count = str(len(joint_names)), id = joints_id + "-array"),
+            E.technique_common
+              (
+                E.accessor
+                  (
+                    E.param(type = "Name", name = "JOINT"),
+                    count = str(len(joint_names)),
+                    stride = "1",
+                    source = idurl(joints_id + "-array"),
+                  )
+              ),
+            id = joints_id,
+          )
+        binds_src = E.source \
+          (
+            E.float_array(_fmt_floats(inv_binds), count = str(len(inv_binds)), id = binds_id + "-array"),
+            E.technique_common
+              (
+                E.accessor
+                  (
+                    E.param(type = "float4x4", name = "TRANSFORM"),
+                    count = str(len(joint_names)),
+                    stride = "16",
+                    source = idurl(binds_id + "-array"),
+                  )
+              ),
+            id = binds_id,
+          )
+        weights_src = E.source \
+          (
+            E.float_array(_fmt_floats(weights), count = str(len(weights)), id = weights_id + "-array"),
+            E.technique_common
+              (
+                E.accessor
+                  (
+                    E.param(type = "float", name = "WEIGHT"),
+                    count = str(len(weights)),
+                    stride = "1",
+                    source = idurl(weights_id + "-array"),
+                  )
+              ),
+            id = weights_id,
+          )
+        bind_shape = E.bind_shape_matrix(_fmt_floats([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]))
+        skin = E.skin \
+          (
+            bind_shape,
+            joints_src,
+            binds_src,
+            weights_src,
+            E.joints
+              (
+                E.input(semantic = "JOINT", source = idurl(joints_id)),
+                E.input(semantic = "INV_BIND_MATRIX", source = idurl(binds_id)),
+              ),
+            E.vertex_weights
+              (
+                E.input(semantic = "JOINT", source = idurl(joints_id), offset = "0"),
+                E.input(semantic = "WEIGHT", source = idurl(weights_id), offset = "1"),
+                E.vcount(" ".join(str(c) for c in vcounts)),
+                E.v(" ".join(str(i) for i in v_indices)),
+                count = str(nverts),
+              ),
+            source = idurl(geom.id),
+          )
+        xml = E.controller(skin, id = ctl_id, name = b_obj.name + "-skin")
+        controller = _SkinControllerExport(ctl_id, xml)
+        self._collada.controllers.append(controller)
+        self._skin_controllers[b_obj.name] = controller
+        return controller
+    #end _make_skin_controller
+
     obj_type_handlers = \
         {
+            "ARMATURE" : (obj_armature, DATABLOCK.ARMATURE),
             "CAMERA" : (obj_camera, DATABLOCK.CAMERA),
+            "CURVE" : (obj_mesh, DATABLOCK.MESH),
             "EMPTY" : (obj_empty, DATABLOCK.EMPTY),
+            "FONT" : (obj_mesh, DATABLOCK.MESH),
             "LIGHT" : (obj_light, DATABLOCK.LAMP),
             "MESH" : (obj_mesh, DATABLOCK.MESH),
+            "META" : (obj_mesh, DATABLOCK.MESH),
+            "SURFACE" : (obj_mesh, DATABLOCK.MESH),
         }
 
     def object(self, b_obj, parent = None) :
@@ -697,8 +1317,10 @@ class ColladaExport :
         if handle_type != None :
             if parent != None :
                 b_matrix = b_obj.matrix_local
-            else :
+            elif self._apply_global_orientation :
                 b_matrix = self._orient @ b_obj.matrix_world
+            else :
+                b_matrix = b_obj.matrix_world
             #end if
 
             obj = handle_type[0](self, b_obj)
@@ -709,11 +1331,12 @@ class ColladaExport :
                 obj.transforms.append(self.matrix(b_matrix))
                 node = obj
             else :
-                node = self.node(b_matrix)
+                node = self.node(b_matrix, b_obj)
             #end if
+            self._export_object_extras(node, b_obj)
             children = self._obj_children.get(b_obj.name)
             if children != None :
-                for childname in children :
+                for childname in sorted(children) :
                     self.object(bpy.data.objects[childname], parent = node)
                 #end for
             #end if
@@ -738,6 +1361,7 @@ class ColladaExport :
         effect_params = []
         if b_mat.diffuse_color[3] != 1.0 :
             effect_kwargs["transparency"] = b_mat.diffuse_color[3]
+            effect_kwargs["transparent"] = OPAQUE_WHITE
         #end if
         if b_mat.use_nodes :
             b_shader = list(n for n in b_mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
@@ -827,12 +1451,16 @@ class ColladaExport :
                 value = get_input("Alpha")
                 if value != None and value != 1.0 :
                     effect_kwargs["transparency"] = value
+                    effect_kwargs["transparent"] = OPAQUE_WHITE
                       # overridden by Transmission (below) if any
                 #end if
                 value = get_input(("Transmission Weight", "Transmission"))
                 if value != None and value != 0 :
                     effect_kwargs["transparency"] = value
-                    effect_kwargs["transparent"] = effect_kwargs["diffuse"]
+                    # Never reuse the diffuse map as <transparent>. Native
+                    # COLLADA uses an A_ONE color; a texture here makes RGB
+                    # images with no alpha render fully invisible.
+                    effect_kwargs["transparent"] = OPAQUE_WHITE
                     value = get_input("IOR")
                     if value != None :
                         effect_kwargs["index_of_refraction"] = value
@@ -863,6 +1491,7 @@ class ColladaExport :
             #end if
         #end if
         effect = Effect(self.next_internal_id(), effect_params, shader, **effect_kwargs)
+        sanitize_effect(effect, shader, set(effect_kwargs.keys()))
         mat = Material(DATABLOCK.MATERIAL.nameid(b_mat.name), b_mat.name, effect)
         self._collada.effects.append(effect)
         self._collada.materials.append(mat)

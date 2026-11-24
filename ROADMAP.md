@@ -7,21 +7,25 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | Version | Focus |
 | --- | --- |
 | **1.1.0–1.1.3** | Static correctness + Extensions compliance / package id `collada_support` |
-| **1.2.0–1.2.2** (current) | Working wheels-only release; leaner Parenting Empties + import progress (1.2.1); no `sys.path` / `sys.modules` changes (1.2.2) |
+| **1.2.0–1.2.2** | Working wheels-only release; leaner Parenting Empties + import progress (1.2.1); no `sys.path` / `sys.modules` changes (1.2.2) |
 | **1.3.0** | Morph / shape-key **import** (then export) |
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
-| **1.5.0** | Armature + skin **export** |
+| **1.5.0** | Armature + skin **export** (bind-pose slice also ships in **2.0.0**) |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
-| **2.0** | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Anim/Extra), static scene parity, interoperability suite |
+| **2.0.0** (current) | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Extra), static scene parity, bind-pose skin export |
 
-### Export options deferred to **2.0**
+### Export options in **2.0.0**
 
-Match Blender 4.5’s COLLADA exporter Main panel (and later tabs):
+Match Blender 4.5’s COLLADA exporter Main panel (and Geom/Arm/Extra):
 
 - Selection Only, Include Children, Include Armatures, Include Shape Keys
-- Global Orientation: Apply, Forward Axis, Up Axis
+- Global Orientation: Apply, Up Axis
 - Texture Options: Copy, UV Only Selected Map
-- Geom / Arm / Anim / Extra panels toward full parity
+- Geom: Apply Modifiers, Triangulate, Use Object Instances
+- Arm: Deform Bones Only; bind-pose JOINT + skin export
+- Extra: Blender profile, custom properties, COLLADA version / ZAE
+
+Animation tabs and morph-target libraries remain later.
 
 ## What 1.1.0 fixed vs still pending
 
@@ -37,11 +41,10 @@ Match Blender 4.5’s COLLADA exporter Main panel (and later tabs):
 
 **Still pending (later releases)**
 
-- Skin / armature / morph / animation (see below)
-- Custom split normals, vertex colors, modifier evaluation options
-- Full UV-binding and units/axis option parity with the old native exporter
+- Morph target library + animation (see below)
+- Custom split-normal attributes beyond smooth/flat
 - Nested ZAE sub-archives
-- Interop test suite (target **2.0**)
+- Broader interop suite vs Blender 4.5 native files
 
 ## Rig notes (from design)
 
@@ -58,4 +61,4 @@ Design constraints:
 - Animation needs dedicated XML parsing (`pycollada` `Animation.load` does not build samplers/channels)
 - First rig slice (**1.4.0**): **import-only**, one controller, **PARENT** mode, LINEAR/STEP matrix channels
 
-Do not land armature/skin/morph/animation work until the corresponding release milestone above.
+Bind-pose skin **export** (JOINT nodes, inverse bind matrices, vertex weights) landed in **2.0.0**. Morph libraries and animation still wait on the milestones above.
