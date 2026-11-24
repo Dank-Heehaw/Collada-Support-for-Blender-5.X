@@ -53,7 +53,7 @@ Import also covers triangle/polylist meshes, UVs, vertex colors, basic materials
 | **`.dae`** | COLLADA **1.4.1** or **1.5.0** |
 | **`.zae`** | Zip package; can include textures |
 
-Export covers meshes (including curves/text converted to mesh), Principled BSDF materials (Blender 5 socket names), object parenting, UVs, vertex colors, loop normals, optional textures, bind-pose armature/skin, and ZAE packaging. Native-style Main/Geom/Arm/Extra options match Blender 4.5 where practical.
+Export covers meshes (including curves/text converted to mesh), Principled BSDF materials (Blender 5 socket names), object parenting, UVs, vertex colors, loop normals, optional textures, bind-pose armature/skin, and ZAE packaging. File Browser options use FBX-style collapsible sections (Include, Transform, Geometry, Armature, Animation, Extra) with Blender 4.5 native names where practical. Mesh export uses the Mesh API only (no BMesh).
 
 ### Import transform modes
 
@@ -108,7 +108,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **2.0.2**)
+- Add-on version (currently **2.0.3**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output
@@ -123,6 +123,7 @@ dist/                      # rebuilt blender_collada_support.zip (local; not in 
 submission/                # Blender Extensions Platform listing materials
 CONTRIBUTING.md            # developer workflow
 CHANGELOG.md               # release history
+TODO.md                    # living checklist and local resource paths
 ROADMAP.md                 # staged OpenCOLLADA parity plan
 ```
 

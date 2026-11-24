@@ -695,7 +695,7 @@ class ColladaExport :
         self._collada.assetInfo.upaxis = "Z_UP"
         try :
             self._collada.assetInfo.contributors[0].authoring_tool = \
-                "Blender %s Collada Support 2.0.2" % bpy.app.version_string
+                "Blender %s Collada Support 2.0.3" % bpy.app.version_string
         except Exception :
             pass
         #end try
