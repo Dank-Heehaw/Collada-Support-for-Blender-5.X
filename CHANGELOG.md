@@ -4,10 +4,37 @@ All notable changes to **Collada Support for Blender 5.X** are documented here.
 
 ## [2.0.0] — unreleased
 
-Import of skinned COLLADA files that previously produced only joint Empties.
+Export fidelity toward the original Blender 4.5 COLLADA exporter so round-tripped scenes keep the same data, plus import of skinned COLLADA files that previously produced only joint Empties.
 
-- **[#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) — instance_controller meshes were skipped.** Scene walking only instantiated `instance_geometry` (plus cameras/lights). Game/DCC files that reference every mesh through `<instance_controller>` / `<skin>` therefore imported as a joint hierarchy of Empties and no mesh. Import now resolves skin and morph controllers to their source geometry and creates the bind-pose mesh in Parenting, Multiply, and Apply modes.
-- **Bind-pose armature:** `type="JOINT"` nodes are converted to a Blender Armature, vertex groups are filled from `<vertex_weights>`, and an Armature modifier is added. Placeholder joint Empties are removed after the bones exist. Animation channels are still not imported.
+**Root cause.** Geometry wrote VERTEX and NORMAL at the same primitive offset, so only one averaged vertex normal survived and flat/smooth shading was lost. Vertex colors were never written. Scene nodes were anonymous, so object names dropped. Meshes came from unevaluated `Object.data` (no modifiers, no curve conversion). Armatures were skipped entirely (`obj_type_handlers` had no ARMATURE), so skins/weights never left Blender. Texture Copy defaulted off. pycollada omitted the XML declaration. Transmission reused the diffuse map as `<transparent>`, which other tools treat as an opacity texture.
+
+**Restored (practical native parity)**
+
+- Per-loop normals (smooth vertex vs flat face) with separate VERTEX/NORMAL offsets
+- Vertex color layers as COLOR (RGBA); import reads them back
+- Named visual-scene nodes from the Blender object
+- Native-style Main/Geom/Arm/Extra export options: Selection Only, Include Children, Include Armatures, Include Shape Keys, Apply Global Orientation, Up axis, Texture Copy (default on), Only Selected UV Map, Apply Modifiers, Triangulate (default on), Use Object Instances, Deform Bones Only, Custom Properties
+- Evaluated meshes (modifiers / current shapekey mix); curves, text, surfaces, metaballs convert to mesh
+- Armature as JOINT nodes plus `<skin>` / `instance_controller` (bind pose, inverse bind matrices, vertex weights)
+- XML declaration; A_ONE transparency instead of a diffuse-as-opacity map; lambert no longer writes phong-only children
+- Object custom properties in the Blender extra profile
+
+**[#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) — instance_controller meshes were skipped.** Scene walking only instantiated `instance_geometry` (plus cameras/lights). Game/DCC files that reference every mesh through `<instance_controller>` / `<skin>` therefore imported as a joint hierarchy of Empties and no mesh. Import now resolves skin and morph controllers to their source geometry and creates the bind-pose mesh in Parenting, Multiply, and Apply modes.
+
+- **Bind-pose armature import:** `type="JOINT"` nodes are converted to a Blender Armature, vertex groups are filled from `<vertex_weights>`, and an Armature modifier is added. Placeholder joint Empties are removed after the bones exist. Animation channels are still not imported.
+
+**Test plan**
+
+1. Install `dist/blender_collada_support.zip` via **Install from Disk** and confirm Preferences shows **2.0.0**.
+2. Default cube: Export COLLADA, re-import (Parenting). Mesh, UVs (if unwrapped), and materials survive; file starts with `<?xml`.
+3. Mixed smooth/flat cube: re-import keeps face smoothness (not all-smooth).
+4. Mesh with a vertex-color layer: export/re-import retains COLOR.
+5. Textured Principled material with Copy enabled: image is written beside the `.dae` and bound on re-import.
+6. Parent empty → mesh: hierarchy names round-trip.
+7. Mesh + Armature + weights: export contains `<library_controllers>` / `<skin>`; re-import shows joints and groups.
+8. Optional: same scene from Blender 4.5 native COLLADA vs this add-on; compare sources (normals, COLOR, JOINT, up-axis).
+
+**Still not full OpenCOLLADA parity:** animation/actions, morph target library export, custom split-normal attributes beyond smooth/flat, nested ZAE, decomposed TRS vs matrix, Second Life OpenSim extras.
 
 ## [1.2.2] — 2026-08-16
 

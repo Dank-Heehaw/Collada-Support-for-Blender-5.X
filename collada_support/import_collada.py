@@ -38,11 +38,12 @@ DEG = math.pi / 180 # angle unit conversion factor
 
 # Match Blender 4.5 MeshImporter::is_nice_mesh: reject/skip bad topology
 # instead of feeding invalid loops into from_pydata (common crash source).
-def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = None, uvcoords = None) :
+def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = None, uvcoords = None, colorcoords = None) :
     clean_faces = []
     clean_smooth = []
     clean_mats = []
     clean_uvs = None if uvcoords is None else [[] for _ in uvcoords]
+    clean_colors = None if colorcoords is None else [[] for _ in colorcoords]
     rejected = 0
     for i, face in enumerate(faces) :
         if face is None :
@@ -90,8 +91,24 @@ def _sanitize_faces(faces, nverts, smooth_shade = None, material_assignments = N
                 #end if
             #end for
         #end if
+        if clean_colors is not None :
+            for layer_i, layer in enumerate(colorcoords) :
+                blank = [(1.0, 1.0, 1.0, 1.0)] * len(idxs)
+                if i < len(layer) :
+                    coords = layer[i]
+                    if len(coords) >= len(idxs) :
+                        clean_colors[layer_i].append([tuple(coords[j]) for j in range(len(idxs))])
+                    else :
+                        pad = list(coords) + blank[len(coords):]
+                        clean_colors[layer_i].append([tuple(c) for c in pad])
+                    #end if
+                else :
+                    clean_colors[layer_i].append(blank)
+                #end if
+            #end for
+        #end if
     #end for
-    return clean_faces, clean_smooth, clean_mats, clean_uvs, rejected
+    return clean_faces, clean_smooth, clean_mats, clean_uvs, clean_colors, rejected
 #end _sanitize_faces
 
 def _face_index_list(prim) :
@@ -933,6 +950,8 @@ class ColladaImport :
             material_assignments = []
             uvcoords = None
             uvcoord_ids = None
+            colorcoords = None
+            colorcoord_ids = None
             # Large meshes: skip O(faces*corners) flat-shade probes (native
             # importer either uses custom normals or leaves shading alone).
             detect_smooth = True
@@ -1089,13 +1108,72 @@ class ColladaImport :
                     #end for
                 #end if
 
+                if "COLOR" in op.sources and len(op.sources["COLOR"]) != 0 :
+                    n_col = len(op.sources["COLOR"])
+                    if colorcoords is None :
+                        colorcoords = [[] for _ in range(n_col)]
+                        colorcoord_ids = tuple(s[2] for s in op.sources["COLOR"])
+                    elif len(colorcoords) != n_col :
+                        n_col = 0
+                    #end if
+                    if n_col :
+                        wrote = False
+                        try :
+                            index = getattr(p, "index", None)
+                            if index is not None :
+                                arr = index if np is None else np.asarray(index)
+                                for layer_i in range(n_col) :
+                                    offset = int(op.sources["COLOR"][layer_i][0])
+                                    src = op.sources["COLOR"][layer_i][-1]
+                                    data = getattr(src, "data", src)
+                                    for fi in range(nfaces) :
+                                        corners = these_faces[fi]
+                                        row = []
+                                        for ci in range(len(corners)) :
+                                            try :
+                                                cidx = int(arr[fi][ci][offset]) if arr.ndim == 3 else int(arr[fi][offset])
+                                                col = data[cidx]
+                                                if len(col) >= 4 :
+                                                    row.append((float(col[0]), float(col[1]), float(col[2]), float(col[3])))
+                                                elif len(col) >= 3 :
+                                                    row.append((float(col[0]), float(col[1]), float(col[2]), 1.0))
+                                                else :
+                                                    row.append((1.0, 1.0, 1.0, 1.0))
+                                                #end if
+                                            except Exception :
+                                                row.append((1.0, 1.0, 1.0, 1.0))
+                                            #end try
+                                        #end for
+                                        colorcoords[layer_i].append(row)
+                                    #end for
+                                #end for
+                                wrote = True
+                            #end if
+                        except Exception :
+                            wrote = False
+                        #end try
+                        if not wrote :
+                            for face in these_faces :
+                                for layer in colorcoords :
+                                    layer.append([(1.0, 1.0, 1.0, 1.0)] * len(face))
+                                #end for
+                            #end for
+                        #end if
+                elif colorcoords is not None :
+                    for face in these_faces :
+                        for layer in colorcoords :
+                            layer.append([(1.0, 1.0, 1.0, 1.0)] * len(face))
+                        #end for
+                    #end for
+                #end if
+
                 faces.extend(tuple(i + vert_start for i in f) for f in these_faces)
                 smooth_shade.extend(these_smooth_shade)
                 material_assignments.extend(these_material_assignments)
             #end for
 
-            faces, smooth_shade, material_assignments, uvcoords, rejected = _sanitize_faces(
-                faces, len(verts), smooth_shade, material_assignments, uvcoords
+            faces, smooth_shade, material_assignments, uvcoords, colorcoords, rejected = _sanitize_faces(
+                faces, len(verts), smooth_shade, material_assignments, uvcoords, colorcoords
             )
             if rejected :
                 sys.stderr.write(
@@ -1200,6 +1278,85 @@ class ColladaImport :
                             loop_start = face.loop_start
                             for j in range(min(face.loop_total, len(coords))) :
                                 uv.data[loop_start + j].uv = coords[j]
+                            #end for
+                        #end for
+                    #end if
+                #end for
+            #end if
+
+            if colorcoords is not None and b_mesh.polygons :
+                color_names = {}
+                if blendstuff is not None :
+                    layer_names = blendstuff.find(tag("layer_names"))
+                    if layer_names is not None :
+                        for name_entry in layer_names.findall(tag("name")) :
+                            if name_entry.get("type") == "COLOR" :
+                                layer_name = name_entry.get("name")
+                                layer_refid = name_entry.get("refid")
+                                if layer_name is not None and layer_refid is not None :
+                                    color_names[layer_refid] = layer_name
+                                #end if
+                            #end if
+                        #end for
+                    #end if
+                #end if
+                for layer_i, layer in enumerate(colorcoords) :
+                    refid = colorcoord_ids[layer_i] if colorcoord_ids and layer_i < len(colorcoord_ids) else None
+                    layer_name = color_names.get(unurlid(refid), "Col") if refid else "Col"
+                    attr = None
+                    try :
+                        attr = b_mesh.color_attributes.new \
+                          (
+                            name = layer_name,
+                            type = "FLOAT_COLOR",
+                            domain = "CORNER",
+                          )
+                    except Exception :
+                        attr = None
+                    #end try
+                    if attr is None :
+                        continue
+                    #end if
+                    flat = []
+                    ok = True
+                    for i, face in enumerate(b_mesh.polygons) :
+                        coords = layer[i] if i < len(layer) else None
+                        if coords is None or len(coords) < face.loop_total :
+                            ok = False
+                            break
+                        #end if
+                        for j in range(face.loop_total) :
+                            col = coords[j]
+                            r, g, b = float(col[0]), float(col[1]), float(col[2])
+                            a = float(col[3]) if len(col) > 3 else 1.0
+                            flat.extend((r, g, b, a))
+                        #end for
+                    #end for
+                    if ok and hasattr(attr, "data") and len(flat) == len(attr.data) * 4 :
+                        try :
+                            attr.data.foreach_set("color", flat)
+                        except Exception :
+                            ok = False
+                        #end try
+                    else :
+                        ok = False
+                    #end if
+                    if not ok :
+                        for i, face in enumerate(b_mesh.polygons) :
+                            if i >= len(layer) :
+                                break
+                            #end if
+                            coords = layer[i]
+                            loop_start = face.loop_start
+                            for j in range(min(face.loop_total, len(coords))) :
+                                col = coords[j]
+                                r, g, b = float(col[0]), float(col[1]), float(col[2])
+                                a = float(col[3]) if len(col) > 3 else 1.0
+                                try :
+                                    attr.data[loop_start + j].color = (r, g, b, a)
+                                except Exception :
+                                    break
+                                #end try
                             #end for
                         #end for
                     #end if

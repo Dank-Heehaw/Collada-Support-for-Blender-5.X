@@ -74,6 +74,9 @@ Verify entries look like:
 - [ ] Import loose `.dae`
 - [ ] Import `.zae` / `.kmz` / `.zip` containing a `.dae`
 - [ ] Export `.dae` and optionally `.zae`
+- [ ] Export/re-import: loop normals (smooth vs flat), vertex colors, object names
+- [ ] Export a skinned mesh: DAE contains `<skin>` / JOINT nodes
+- [ ] Exported file starts with `<?xml version="1.0"`
 - [ ] Import **Parenting** mode preserves useful hierarchy on a group-heavy file (e.g. SketchUp)
 - [ ] Import **Multiply** still places geometry correctly
 - [ ] Malformed / empty geometry does not crash Blender (check System Console)

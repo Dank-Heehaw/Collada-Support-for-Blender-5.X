@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (1, 2, 2),
+    "version": (2, 0, 0),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -167,8 +167,13 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         default="dae",
     )
     export_textures: BoolProperty(
-        name="Export Textures",
-        description="Write texture image files next to the DAE (or into the ZAE)",
+        name="Copy",
+        description="Copy textures next to the DAE (or into the ZAE), matching native Texture Options",
+        default=True,
+    )
+    active_uv_only: BoolProperty(
+        name="Only Selected UV Map",
+        description="Export only the active UV map (native default exports all layers)",
         default=False,
     )
     up_axis: EnumProperty(
@@ -180,17 +185,104 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         ),
         default="Z_UP",
     )
+    apply_global_orientation: BoolProperty(
+        name="Apply Global Orientation",
+        description="Rotate root objects to match Up; otherwise only the COLLADA asset up-axis is set",
+        default=False,
+    )
     use_selection: BoolProperty(
         name="Selection Only",
         description="Export selected objects only",
         default=False,
     )
+    include_children: BoolProperty(
+        name="Include Children",
+        description="Export children of selected objects even if they are not selected",
+        default=False,
+    )
+    include_armatures: BoolProperty(
+        name="Include Armatures",
+        description="Export related armatures even if they are not selected",
+        default=False,
+    )
+    include_shapekeys: BoolProperty(
+        name="Include Shape Keys",
+        description="Bake the current shape-key mix into exported mesh data",
+        default=False,
+    )
+    apply_modifiers: BoolProperty(
+        name="Apply Modifiers",
+        description="Export the evaluated mesh (Armature modifiers are skipped when skin is exported)",
+        default=False,
+    )
+    triangulate: BoolProperty(
+        name="Triangulate",
+        description="Export polygons as triangles (native default)",
+        default=True,
+    )
+    use_object_instantiation: BoolProperty(
+        name="Use Object Instances",
+        description="Share geometry for objects that use the same mesh datablock",
+        default=True,
+    )
+    deform_bones_only: BoolProperty(
+        name="Deform Bones Only",
+        description="Only export deforming bones with armatures",
+        default=False,
+    )
+    export_custom_properties: BoolProperty(
+        name="Custom Properties",
+        description="Write object custom properties into the Blender extra profile",
+        default=True,
+    )
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        main = layout.box()
+        main.label(text="Main")
+        col = main.column(align=True)
+        col.prop(self, "use_selection")
+        sub = col.column(align=True)
+        sub.enabled = self.use_selection
+        sub.prop(self, "include_children")
+        sub.prop(self, "include_armatures")
+        col.prop(self, "include_shapekeys")
+
+        orient = layout.box()
+        orient.label(text="Global Orientation")
+        orient.prop(self, "apply_global_orientation")
+        orient.prop(self, "up_axis")
+
+        tex = layout.box()
+        tex.label(text="Texture Options")
+        tex.prop(self, "export_textures")
+        tex.prop(self, "active_uv_only")
+
+        geom = layout.box()
+        geom.label(text="Geom")
+        geom.prop(self, "apply_modifiers")
+        geom.prop(self, "triangulate")
+        geom.prop(self, "use_object_instantiation")
+
+        arm = layout.box()
+        arm.label(text="Arm")
+        arm.prop(self, "deform_bones_only")
+
+        extra = layout.box()
+        extra.label(text="Extra")
+        extra.prop(self, "collada_version")
+        extra.prop(self, "export_as")
+        extra.prop(self, "add_blender_extensions")
+        extra.prop(self, "export_custom_properties")
 
     def check(self, context):
         out_ext = ".zae" if self.export_as == "zae" else ".dae"
         if not self.filepath.endswith(out_ext):
             self.filepath = os.path.splitext(self.filepath)[0] + out_ext
-            self.export_textures = self.export_as == "zae"
+            if self.export_as == "zae":
+                self.export_textures = True
             return True
         return False
 

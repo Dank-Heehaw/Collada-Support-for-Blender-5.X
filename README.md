@@ -44,7 +44,7 @@ Built from the pycollada lineage ([ldo](https://github.com/ldo/blender_pycollada
 | **`.kmz`** | Earth / Warehouse-style zip with embedded `.dae` + textures |
 | **`.zip`** | Any zip that contains at least one `.dae` |
 
-Import also covers triangle/polylist meshes, UVs, basic materials, textures (when resolvable), cameras, lights, **skinned `instance_controller` meshes** (bind-pose mesh + Armature/weights from `JOINT` nodes), and SketchUp-oriented quirks where possible.
+Import also covers triangle/polylist meshes, UVs, vertex colors, basic materials, textures (when resolvable), cameras, lights, **skinned `instance_controller` meshes** (bind-pose mesh + Armature/weights from `JOINT` nodes), and SketchUp-oriented quirks where possible.
 
 ### Export
 
@@ -53,7 +53,7 @@ Import also covers triangle/polylist meshes, UVs, basic materials, textures (whe
 | **`.dae`** | COLLADA **1.4.1** or **1.5.0** |
 | **`.zae`** | Zip package; can include textures |
 
-Export covers meshes, Principled BSDF materials (Blender 5 socket names), object parenting, optional textures, and ZAE packaging.
+Export covers meshes (including curves/text converted to mesh), Principled BSDF materials (Blender 5 socket names), object parenting, UVs, vertex colors, loop normals, optional textures, bind-pose armature/skin, and ZAE packaging. Native-style Main/Geom/Arm/Extra options match Blender 4.5 where practical.
 
 ### Import transform modes
 
@@ -84,12 +84,12 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 
 **Fixed in 1.1.0 (static correctness):** multi-material export indices, empty material slots, selection-only export with unselected parents, atomic DAE/ZAE write, ortho camera scale, scene unit export, and surfaced pycollada parse warnings.
 
+**2.0.0 export fidelity:** per-loop normals, vertex colors, named nodes, Apply Modifiers / Triangulate / Texture Copy, Include Children/Armatures/Shape Keys, and bind-pose armature/skin export.
+
 **Still pending:**
 
-- Native OpenCOLLADA-style **export** Main options (Include Children/Armatures/Shape Keys, Global Orientation axes, Texture Copy / UV map) — planned **2.0**
-- Skin **animation** and armature **export** are not implemented yet (bind-pose controller import + Armature/weights landed in **2.0.0**; see roadmap)
-- No morph / shape-key I/O yet (planned 1.3)
-- No full custom split-normals / vertex-color parity (planned 2.0 with export panels)
+- Skin **animation** and morph / shape-key **library** I/O (see roadmap)
+- Custom split-normal attributes beyond smooth vs flat faces
 - Very large files remain CPU-bound during XML parse (pycollada)
 - Nested ZAE sub-archives are not supported
 - Not full feature parity with the old OpenCOLLADA importer/exporter
@@ -106,7 +106,7 @@ See **[ROADMAP.md](ROADMAP.md)** for the staged OpenCOLLADA parity plan (1.1 →
 Please include:
 
 - Blender version (e.g. 5.0 / 5.2)
-- Add-on version (currently **1.2.1**)
+- Add-on version (currently **2.0.0**)
 - Input/output format (`.dae` / `.zae` / `.kmz` / `.zip`)
 - Import **Transformations** mode if relevant
 - Full console output

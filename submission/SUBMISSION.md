@@ -5,7 +5,7 @@ Copy each section into the **Submit add-on for approval** form. Upload files fro
 | Field / asset | Value or path |
 | --- | --- |
 | Package id | `collada_support` |
-| Version | `1.2.2` |
+| Version | `2.0.0` |
 | Display name | Collada Support |
 | License | GPL-3.0-or-later |
 
@@ -39,7 +39,7 @@ https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 
 Paste the full contents of:
 
-`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_1.2.2.md`
+`F:\Projects\Addons\Blender-Collade-Support\submission\RELEASE_NOTES_2.0.0.md`
 
 ---
 
@@ -151,15 +151,19 @@ Built on the pycollada Blender lineage:
 
 ---
 
-## Quick paste — Release notes (1.2.2)
+## Quick paste — Release notes (2.0.0)
 
 ```markdown
-# Collada Support 1.2.2
+# Collada Support 2.0.0
 
 ## Changes
 
-- Remove all runtime `sys.path` and `sys.modules` manipulation (including NumPy site-packages reordering)
-- pycollada is imported normally; wheels remain listed in the extension manifest for Blender to load
+- **Export fidelity** toward Blender 4.5 native COLLADA: per-loop normals, vertex colors, named object nodes, modifier evaluation, triangulate, texture copy, and native-style Main/Geom/Arm/Extra options.
+- **Skin export:** armatures as JOINT nodes, bind-pose `<skin>` controllers, inverse bind matrices, and vertex weights.
+- **Materials:** XML declaration; do not reuse the diffuse map as `<transparent>`; lambert effects no longer emit phong-only children.
+- **Import:** vertex color layers (COLOR) round-trip with export.
+
+Install **`blender_collada_support.zip`** from Releases (not GitHub **Code → Download ZIP**).
 ```
 
 ---
@@ -170,7 +174,8 @@ Built on the pycollada Blender lineage:
 F:\Projects\Addons\Blender-Collade-Support\submission\
   SUBMISSION.md              ← this checklist
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_1.2.2.md     ← form: Version release notes
+  RELEASE_NOTES_2.0.0.md     ← form: Version release notes
+  RELEASE_NOTES_1.2.2.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.2.0.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.1.3.md     ← earlier notes (kept for reference)
   RELEASE_NOTES_1.1.2.md     ← earlier notes (kept for reference)
