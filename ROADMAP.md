@@ -12,9 +12,10 @@ Staged plan toward Blender 4.5 / OpenCOLLADA feature parity. Static mesh I/O is 
 | **1.4.0** | Armature + skin controller **import** (first slice: one Skin, one skeleton; matrix bone anim later) |
 | **1.5.0** | Armature + skin **export** (bind-pose slice also ships in **2.0.0**) |
 | **1.6–1.7** | Animation import/export (raw XML layer; pycollada lacks sampler/channel parsing) |
-| **2.0.0** (current) | Native OpenCOLLADA-style **export** options (Main/Geom/Arm/Extra), static scene parity, bind-pose skin export |
+| **2.0.0** | Native-style export options (Main/Geom/Arm/Extra), static scene parity, bind-pose skin export |
+| **2.0.1** (current) | Blender 5 `BMLoopSeq` crash fix; operator/ID/skin/morph semantics matched to the 4.5 C++ exporter |
 
-### Export options in **2.0.0**
+### Export options in **2.0.1**
 
 Match Blender 4.5’s COLLADA exporter Main panel (and Geom/Arm/Extra):
 
@@ -61,4 +62,4 @@ Design constraints:
 - Animation needs dedicated XML parsing (`pycollada` `Animation.load` does not build samplers/channels)
 - First rig slice (**1.4.0**): **import-only**, one controller, **PARENT** mode, LINEAR/STEP matrix channels
 
-Bind-pose skin **export** (JOINT nodes, inverse bind matrices, vertex weights) landed in **2.0.0**. Morph libraries and animation still wait on the milestones above.
+Bind-pose skin **export** (JOINT nodes, inverse bind matrices, vertex weights) landed in **2.0.0** and was aligned to native IDs/bind-shape in **2.0.1**. Morph **target geometries** export in 2.0.1; animation libraries still wait on the milestones above.

@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (2, 0, 0),
+    "version": (2, 0, 1),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -39,6 +39,7 @@ from bpy.props import (
     BoolProperty,
     CollectionProperty,
     EnumProperty,
+    IntProperty,
     StringProperty,
 )
 from bpy_extras.io_utils import ExportHelper, ImportHelper
@@ -81,7 +82,7 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
 
     bl_idname = "import_scene.collada"
     bl_label = "Import COLLADA"
-    bl_options = {"UNDO"}
+    bl_options = {"UNDO", "PRESET"}
 
     filter_glob: StringProperty(
         default="*.dae;*.zae;*.kmz;*.zip",
@@ -93,6 +94,49 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
     )
     directory: StringProperty(subtype="DIR_PATH")
 
+    # Native WM_OT_collada_import names/defaults, plus this add-on's hierarchy mode.
+    import_units: BoolProperty(
+        name="Import Units",
+        description=(
+            "If disabled match import to Blender's current Unit settings, "
+            "otherwise use the settings from the Imported scene"
+        ),
+        default=False,
+    )
+    custom_normals: BoolProperty(
+        name="Custom Normals",
+        description="Import custom normals, if available (otherwise Blender will compute them)",
+        default=True,
+    )
+    fix_orientation: BoolProperty(
+        name="Fix Leaf Bones",
+        description="Fix Orientation of Leaf Bones (Collada does only support Joints)",
+        default=False,
+    )
+    find_chains: BoolProperty(
+        name="Find Bone Chains",
+        description="Find best matching Bone Chains and ensure bones in chain are connected",
+        default=False,
+    )
+    auto_connect: BoolProperty(
+        name="Auto Connect",
+        description="Set use_connect for parent bones which have exactly one child bone",
+        default=False,
+    )
+    min_chain_length: IntProperty(
+        name="Minimum Chain Length",
+        description="When searching Bone Chains disregard chains of length below this value",
+        default=0,
+        min=0,
+    )
+    keep_bind_info: BoolProperty(
+        name="Keep Bind Info",
+        description=(
+            "Store Bindpose information in custom bone properties for later use "
+            "during Collada export"
+        ),
+        default=False,
+    )
     recognize_blender_extensions: BoolProperty(
         name="Recognize Blender Extensions",
         description="Recognize extra info specific to Blender",
@@ -116,6 +160,26 @@ class IMPORT_OT_collada(bpy.types.Operator, ImportHelper):
         default="PARENT",
     )
 
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+
+        box = layout.box()
+        box.label(text="Import Data Options")
+        box.prop(self, "import_units")
+        box.prop(self, "custom_normals")
+        box.prop(self, "transformation")
+        box.prop(self, "recognize_blender_extensions")
+
+        box = layout.box()
+        box.label(text="Armature Options")
+        box.prop(self, "fix_orientation")
+        box.prop(self, "find_chains")
+        box.prop(self, "auto_connect")
+        box.prop(self, "min_chain_length")
+
+        layout.prop(self, "keep_bind_info")
+
     def execute(self, context):
         if not _refresh_collada_status():
             detail = COLLADA_IMPORT_ERROR or "unknown import error"
@@ -138,12 +202,223 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
 
     bl_idname = "export_scene.collada"
     bl_label = "Export COLLADA"
-    bl_options = {"UNDO"}
+    bl_options = {"UNDO", "PRESET"}
 
     filename_ext = ".dae"
     filter_glob: StringProperty(default="*.dae", options={"HIDDEN"})
     directory: StringProperty(subtype="DIR_PATH")
 
+    # Property names/defaults match WM_OT_collada_export in Blender 4.5 io_collada.cc.
+    prop_bc_export_ui_section: EnumProperty(
+        name="Export Section",
+        description="Only for User Interface organization",
+        items=(
+            ("main", "Main", "Data export section"),
+            ("geometry", "Geom", "Geometry export section"),
+            ("armature", "Arm", "Armature export section"),
+            ("animation", "Anim", "Animation export section"),
+            ("collada", "Extra", "Collada export section"),
+        ),
+        default="main",
+    )
+    selected: BoolProperty(
+        name="Selection Only",
+        description="Export only selected elements",
+        default=False,
+    )
+    include_children: BoolProperty(
+        name="Include Children",
+        description="Export all children of selected objects (even if not selected)",
+        default=False,
+    )
+    include_armatures: BoolProperty(
+        name="Include Armatures",
+        description="Export related armatures (even if not selected)",
+        default=False,
+    )
+    include_shapekeys: BoolProperty(
+        name="Include Shape Keys",
+        description="Export all Shape Keys from Mesh Objects",
+        default=False,
+    )
+    apply_global_orientation: BoolProperty(
+        name="Apply Global Orientation",
+        description=(
+            "Rotate all root objects to match the global orientation settings "
+            "otherwise set the global orientation per Collada asset"
+        ),
+        default=False,
+    )
+    export_global_forward_selection: EnumProperty(
+        name="Global Forward Axis",
+        description="Global Forward axis for export",
+        items=(
+            ("X", "X", "Global Forward is positive X Axis"),
+            ("Y", "Y", "Global Forward is positive Y Axis"),
+            ("Z", "Z", "Global Forward is positive Z Axis"),
+            ("-X", "-X", "Global Forward is negative X Axis"),
+            ("-Y", "-Y", "Global Forward is negative Y Axis"),
+            ("-Z", "-Z", "Global Forward is negative Z Axis"),
+        ),
+        default="Y",
+    )
+    export_global_up_selection: EnumProperty(
+        name="Global Up Axis",
+        description="Global Up axis for export",
+        items=(
+            ("X", "X", "Global UP is positive X Axis"),
+            ("Y", "Y", "Global UP is positive Y Axis"),
+            ("Z", "Z", "Global UP is positive Z Axis"),
+            ("-X", "-X", "Global UP is negative X Axis"),
+            ("-Y", "-Y", "Global UP is negative Y Axis"),
+            ("-Z", "-Z", "Global UP is negative Z Axis"),
+        ),
+        default="Z",
+    )
+    use_texture_copies: BoolProperty(
+        name="Copy",
+        description="Copy textures to same folder where the .dae file is exported",
+        default=True,
+    )
+    active_uv_only: BoolProperty(
+        name="Only Selected UV Map",
+        description="Export only the selected UV Map",
+        default=False,
+    )
+    triangulate: BoolProperty(
+        name="Triangulate",
+        description="Export polygons (quads and n-gons) as triangles",
+        default=True,
+    )
+    apply_modifiers: BoolProperty(
+        name="Apply Modifiers",
+        description="Apply modifiers to exported mesh (non destructive)",
+        default=False,
+    )
+    export_mesh_type_selection: EnumProperty(
+        name="Resolution",
+        description="Modifier resolution for export",
+        items=(
+            ("view", "Viewport", "Apply modifier's viewport settings"),
+            ("render", "Render", "Apply modifier's render settings"),
+        ),
+        default="view",
+    )
+    export_object_transformation_type_selection: EnumProperty(
+        name="Transform",
+        description="Object Transformation type for translation, scale and rotation",
+        items=(
+            ("matrix", "Matrix", "Use <matrix> representation for exported transformations"),
+            (
+                "decomposed",
+                "Decomposed",
+                "Use <rotate>, <translate> and <scale> representation for exported transformations",
+            ),
+        ),
+        default="matrix",
+    )
+    use_object_instantiation: BoolProperty(
+        name="Use Object Instances",
+        description="Instantiate multiple Objects from same Data",
+        default=True,
+    )
+    use_blender_profile: BoolProperty(
+        name="Use Blender Profile",
+        description=(
+            "Export additional Blender specific information (for material, shaders, bones, etc.)"
+        ),
+        default=True,
+    )
+    sort_by_name: BoolProperty(
+        name="Sort by Object name",
+        description="Sort exported data by Object name",
+        default=False,
+    )
+    limit_precision: BoolProperty(
+        name="Limit Precision",
+        description="Reduce the precision of the exported data to 6 digits",
+        default=False,
+    )
+    deform_bones_only: BoolProperty(
+        name="Deform Bones Only",
+        description="Only export deforming bones with armatures",
+        default=False,
+    )
+    open_sim: BoolProperty(
+        name="Export to SL/OpenSim",
+        description=(
+            "Compatibility mode for Second Life, OpenSimulator and other compatible online worlds"
+        ),
+        default=False,
+    )
+    include_animations: BoolProperty(
+        name="Include Animations",
+        description=(
+            "Export animations if available (exporting animations will enforce the decomposition "
+            "of node transforms into <translation> <rotation> and <scale> components)"
+        ),
+        default=True,
+    )
+    export_animation_type_selection: EnumProperty(
+        name="Key Type",
+        description="Type for exported animations (use sample keys or Curve keys)",
+        items=(
+            ("sample", "Samples", "Export Sampled points guided by sampling rate"),
+            ("keys", "Curves", "Export Curves (note: guided by curve keys)"),
+        ),
+        default="sample",
+    )
+    export_animation_transformation_type_selection: EnumProperty(
+        name="Transform",
+        description=(
+            "Transformation type for translation, scale and rotation. "
+            "Note: The Animation transformation type in the Anim Tab "
+            "is always equal to the Object transformation type in the Geom tab"
+        ),
+        items=(
+            ("matrix", "Matrix", "Use <matrix> representation for exported transformations"),
+            (
+                "decomposed",
+                "Decomposed",
+                "Use <rotate>, <translate> and <scale> representation for exported transformations",
+            ),
+        ),
+        default="matrix",
+    )
+    sampling_rate: IntProperty(
+        name="Sampling Rate",
+        description="The distance between 2 keyframes (1 to key every frame)",
+        default=1,
+        min=1,
+    )
+    keep_smooth_curves: BoolProperty(
+        name="Keep Smooth curves",
+        description="Export also the curve handles (if available)",
+        default=False,
+    )
+    keep_keyframes: BoolProperty(
+        name="Keep Keyframes",
+        description="Use existing keyframes as additional sample points",
+        default=False,
+    )
+    keep_flat_curves: BoolProperty(
+        name="All Keyed Curves",
+        description="Export also curves which have only one key or are totally flat",
+        default=False,
+    )
+    include_all_actions: BoolProperty(
+        name="Include all Actions",
+        description="Export also unassigned actions (this allows you to export entire animation libraries)",
+        default=True,
+    )
+    keep_bind_info: BoolProperty(
+        name="Keep Bind Info",
+        description=(
+            "Store Bindpose information in custom bone properties for later use during Collada export"
+        ),
+        default=False,
+    )
+    # Add-on extras beyond the 4.5 operator (ZAE packaging / schema version).
     collada_version: EnumProperty(
         name="Collada Version",
         description="Version number written into the COLLADA file",
@@ -153,11 +428,6 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         ),
         default="1.4.1",
     )
-    add_blender_extensions: BoolProperty(
-        name="Add Blender Extensions",
-        description="Include extra info specific to Blender",
-        default=True,
-    )
     export_as: EnumProperty(
         name="Export as",
         items=(
@@ -166,125 +436,92 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         ),
         default="dae",
     )
-    export_textures: BoolProperty(
-        name="Copy",
-        description="Copy textures next to the DAE (or into the ZAE), matching native Texture Options",
-        default=True,
-    )
-    active_uv_only: BoolProperty(
-        name="Only Selected UV Map",
-        description="Export only the active UV map (native default exports all layers)",
-        default=False,
-    )
-    up_axis: EnumProperty(
-        name="Up",
-        items=(
-            ("X_UP", "X Up", ""),
-            ("Y_UP", "Y Up", ""),
-            ("Z_UP", "Z Up", ""),
-        ),
-        default="Z_UP",
-    )
-    apply_global_orientation: BoolProperty(
-        name="Apply Global Orientation",
-        description="Rotate root objects to match Up; otherwise only the COLLADA asset up-axis is set",
-        default=False,
-    )
-    use_selection: BoolProperty(
-        name="Selection Only",
-        description="Export selected objects only",
-        default=False,
-    )
-    include_children: BoolProperty(
-        name="Include Children",
-        description="Export children of selected objects even if they are not selected",
-        default=False,
-    )
-    include_armatures: BoolProperty(
-        name="Include Armatures",
-        description="Export related armatures even if they are not selected",
-        default=False,
-    )
-    include_shapekeys: BoolProperty(
-        name="Include Shape Keys",
-        description="Bake the current shape-key mix into exported mesh data",
-        default=False,
-    )
-    apply_modifiers: BoolProperty(
-        name="Apply Modifiers",
-        description="Export the evaluated mesh (Armature modifiers are skipped when skin is exported)",
-        default=False,
-    )
-    triangulate: BoolProperty(
-        name="Triangulate",
-        description="Export polygons as triangles (native default)",
-        default=True,
-    )
-    use_object_instantiation: BoolProperty(
-        name="Use Object Instances",
-        description="Share geometry for objects that use the same mesh datablock",
-        default=True,
-    )
-    deform_bones_only: BoolProperty(
-        name="Deform Bones Only",
-        description="Only export deforming bones with armatures",
-        default=False,
-    )
-    export_custom_properties: BoolProperty(
-        name="Custom Properties",
-        description="Write object custom properties into the Blender extra profile",
-        default=True,
-    )
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
+        layout.prop(self, "prop_bc_export_ui_section", expand=True)
+        section = self.prop_bc_export_ui_section
 
-        main = layout.box()
-        main.label(text="Main")
-        col = main.column(align=True)
-        col.prop(self, "use_selection")
-        sub = col.column(align=True)
-        sub.enabled = self.use_selection
-        sub.prop(self, "include_children")
-        sub.prop(self, "include_armatures")
-        col.prop(self, "include_shapekeys")
+        if section == "main":
+            box = layout.box()
+            box.label(text="Main")
+            col = box.column(align=True)
+            col.prop(self, "selected")
+            sub = col.column(align=True)
+            sub.enabled = self.selected
+            sub.prop(self, "include_children")
+            sub.prop(self, "include_armatures")
+            col.prop(self, "include_shapekeys")
 
-        orient = layout.box()
-        orient.label(text="Global Orientation")
-        orient.prop(self, "apply_global_orientation")
-        orient.prop(self, "up_axis")
+            box = layout.box()
+            box.label(text="Global Orientation")
+            box.prop(self, "apply_global_orientation", text="Apply")
+            box.prop(self, "export_global_forward_selection", text="Forward Axis")
+            box.prop(self, "export_global_up_selection", text="Up Axis")
 
-        tex = layout.box()
-        tex.label(text="Texture Options")
-        tex.prop(self, "export_textures")
-        tex.prop(self, "active_uv_only")
+            box = layout.box()
+            box.label(text="Texture Options")
+            box.prop(self, "use_texture_copies")
+            box.prop(self, "active_uv_only")
 
-        geom = layout.box()
-        geom.label(text="Geom")
-        geom.prop(self, "apply_modifiers")
-        geom.prop(self, "triangulate")
-        geom.prop(self, "use_object_instantiation")
+        elif section == "geometry":
+            box = layout.box()
+            box.label(text="Export Data Options")
+            box.prop(self, "triangulate")
+            row = box.row(align=True)
+            row.prop(self, "apply_modifiers", text="")
+            sub = row.row(align=True)
+            sub.enabled = self.apply_modifiers
+            sub.prop(self, "export_mesh_type_selection", text="")
+            box.prop(self, "export_object_transformation_type_selection")
 
-        arm = layout.box()
-        arm.label(text="Arm")
-        arm.prop(self, "deform_bones_only")
+        elif section == "armature":
+            box = layout.box()
+            box.label(text="Armature")
+            box.prop(self, "deform_bones_only")
+            box.prop(self, "open_sim")
 
-        extra = layout.box()
-        extra.label(text="Extra")
-        extra.prop(self, "collada_version")
-        extra.prop(self, "export_as")
-        extra.prop(self, "add_blender_extensions")
-        extra.prop(self, "export_custom_properties")
+        elif section == "animation":
+            box = layout.box()
+            box.label(text="Animation")
+            box.prop(self, "include_animations")
+            col = box.column(align=True)
+            col.enabled = self.include_animations
+            col.prop(self, "export_animation_type_selection", expand=True)
+            col.prop(self, "export_animation_transformation_type_selection")
+            sub = col.column(align=True)
+            sub.enabled = (
+                self.include_animations
+                and self.export_animation_type_selection == "sample"
+            )
+            sub.prop(self, "sampling_rate")
+            sub.prop(self, "keep_keyframes")
+            col.prop(self, "keep_flat_curves")
+            col.prop(self, "include_all_actions")
+            col.prop(self, "keep_smooth_curves")
+
+        else:
+            box = layout.box()
+            box.label(text="Collada Options")
+            box.prop(self, "use_object_instantiation")
+            box.prop(self, "use_blender_profile")
+            box.prop(self, "sort_by_name")
+            box.prop(self, "keep_bind_info")
+            box.prop(self, "limit_precision")
+            box.prop(self, "collada_version")
+            box.prop(self, "export_as")
 
     def check(self, context):
         out_ext = ".zae" if self.export_as == "zae" else ".dae"
+        changed = False
         if not self.filepath.endswith(out_ext):
             self.filepath = os.path.splitext(self.filepath)[0] + out_ext
-            if self.export_as == "zae":
-                self.export_textures = True
-            return True
-        return False
+            changed = True
+        if self.export_as == "zae" and not self.use_texture_copies:
+            self.use_texture_copies = True
+            changed = True
+        return changed
 
     def execute(self, context):
         if not _refresh_collada_status():
@@ -294,7 +531,7 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
 
         from . import export_collada
 
-        kwargs = self.as_keywords(ignore=("filter_glob",))
+        kwargs = self.as_keywords(ignore=("filter_glob", "prop_bc_export_ui_section"))
         if os.path.exists(self.filepath) and not os.path.isfile(self.filepath):
             self.report({"ERROR"}, f"Not a file: {kwargs['filepath']}")
             return {"CANCELLED"}

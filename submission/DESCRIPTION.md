@@ -45,7 +45,7 @@ This extension ships **pycollada** (and its small dependencies) as wheels inside
 
 ## Limitations
 
-- Skin **animation** and morph / shape-key library I/O are not implemented yet (bind-pose armature/skin **export** is in 2.0.0)
+- Skin **animation** libraries are not written yet (bind-pose armature/skin **export** and morph target geometries are in 2.0.1)
 - Custom split-normal attributes beyond smooth vs flat faces are not full native parity
 - Very large scenes remain CPU-bound during XML parse
 - Nested ZAE sub-archives are not supported

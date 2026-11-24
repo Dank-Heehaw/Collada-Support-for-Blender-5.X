@@ -2,9 +2,35 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.1] — 2026-11-23
+
+Crash fix plus export/import alignment with Blender 4.5’s original C++ COLLADA operator (`io_collada.cc` / `source/blender/io/collada`).
+
+**Crash.** Export died with `'BMLoopSeq' object has no attribute 'ensure_lookup_table'`. In Blender 5, `ensure_lookup_table` exists on verts/edges/faces (when present) but **not** on loops. A helper now ensures only those sequences and never calls it on `BMLoopSeq`.
+
+**Original-implementation alignment**
+
+- Export operator properties, defaults, and Main/Geom/Arm/Anim/Extra tabs use the native 4.5 names (`selected`, `use_texture_copies`, `use_blender_profile`, forward/up axes, transform type, OpenSim, precision, animation flags, …)
+- Native-style IDs: `{name}-mesh`, `{name}-material`/`-effect`, `{name}-camera`/`-light`, joint `{arm}_{bone}` / SID, skin `{arm}_{obj}-skin`, source suffixes `-positions`/`-normals`/`-map`/`-colors`
+- Primitive material symbols and UV `bind_vertex_input` names match GeometryExporter / InstanceWriter
+- Texture copies go next to the `.dae` (not a `textures/` subfolder); asset up-axis is always `Z_UP` with Y-forward Z-up as the conversion default
+- Skinned meshes write identity node transforms and a real `<bind_shape_matrix>`; inverse bind matrices are rest-pose world inverses in COLLADA column-major order; skeleton URLs point at root JOINT ids
+- Include Shape Keys exports morph target geometries + a morph controller (no longer bakes the mix into the basis)
+- Invisible objects are skipped; sort-by-name, limit-precision, decomposed TRS, and deform-bones-only follow the C++ exporter
+- Import operator exposes native options (`import_units`, `custom_normals`, armature chain flags) and prefers COLLADA `name` plus stripping `-mesh`/`-material` suffixes
+
+**Test plan**
+
+1. Install `dist/blender_collada_support.zip` via **Install from Disk** and confirm Preferences shows **2.0.1**.
+2. Default cube with mixed smooth/flat faces: Export COLLADA — must not crash; re-import keeps smoothness.
+3. Textured mesh with Copy enabled: image sits beside the `.dae`.
+4. Mesh + Armature + weights: DAE contains `<skin>`, JOINT nodes, and `#Armature_Bone` skeleton URLs.
+
+**Still not full OpenCOLLADA parity:** sampled/key animation libraries (`include_animations` is accepted but not yet written), OpenSim extras beyond joint rest tweaks, custom split-normal attributes beyond smooth/flat, nested ZAE, bone-parented object offsets.
+
 ## [2.0.0] — unreleased
 
-Export fidelity toward the original Blender 4.5 COLLADA exporter so round-tripped scenes keep the same data.
+Export fidelity toward the original Blender 4.5 COLLADA exporter so round-tripped scenes keep the same data. Superseded by **2.0.1** (crash fix + native operator alignment).
 
 **Root cause.** Geometry wrote VERTEX and NORMAL at the same primitive offset, so only one averaged vertex normal survived and flat/smooth shading was lost. Vertex colors were never written. Scene nodes were anonymous, so object names dropped. Meshes came from unevaluated `Object.data` (no modifiers, no curve conversion). Armatures were skipped entirely (`obj_type_handlers` had no ARMATURE), so skins/weights never left Blender. Texture Copy defaulted off. pycollada omitted the XML declaration. Transmission reused the diffuse map as `<transparent>`, which other tools treat as an opacity texture.
 
@@ -131,6 +157,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[2.0.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.1
 [1.2.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.2
 [1.2.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.1
 [1.2.0]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v1.2.0
