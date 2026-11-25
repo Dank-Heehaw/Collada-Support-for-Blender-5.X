@@ -2,9 +2,16 @@
 
 All notable changes to **Collada Support for Blender 5.X** are documented here.
 
+## [2.0.4] — 2026-11-24
+
+Current installable release. Fixes Windows texture-copy and scripted-export path bugs.
+
+- **Texture Copy + relative images:** Blender stores blend-relative images as `//tex.png`. On Windows, `os.path.basename("//tex.png")` treats that as a UNC path and returns an empty name, so Copy tried to open the export directory. Export now resolves with `bpy.path.abspath(..., library=image.library)` and takes the filename via `bpy.path.basename` (with absolute-path / image-name fallbacks).
+- **Scripted export:** `bpy.ops.export_scene.collada(filepath=...)` without `directory=` no longer fails with `[WinError 3] ...: ''`. The operator and exporter derive the output directory from `filepath` when `directory` is empty, and create that folder if needed so `os.replace` does not fail on a missing path.
+
 ## [2.0.3] — 2026-11-23
 
-Current installable release. Rewrites mesh export on Blender’s **Mesh** API (`obj.to_mesh` / evaluated mesh, `vertices`, `polygons`, `loops`, `uv_layers`, `color_attributes`, `loop_triangles`). BMesh is no longer imported or used in the exporter, so Blender 5 cannot hit `'BMLoopSeq' object has no attribute 'ensure_lookup_table'`. The shipped Python has **no** `ensure_lookup_table` calls (only a warning comment on `encode_mesh`).
+Rewrites mesh export on Blender’s **Mesh** API (`obj.to_mesh` / evaluated mesh, `vertices`, `polygons`, `loops`, `uv_layers`, `color_attributes`, `loop_triangles`). BMesh is no longer imported or used in the exporter, so Blender 5 cannot hit `'BMLoopSeq' object has no attribute 'ensure_lookup_table'`. The shipped Python has **no** `ensure_lookup_table` calls (only a warning comment on `encode_mesh`).
 
 **Includes everything from 2.0.2:** [#3](https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues/3) skin import, 2.0.0 export fidelity, 2.0.1 Blender 4.5 operator/ID/skin/morph alignment, and FBX-style collapsible File Browser panels (Include, Transform, Geometry, Armature, Animation, Extra). Cabinet Vision draft work is **not** in this line.
 
@@ -54,7 +61,7 @@ Crash fix plus export/import alignment with Blender 4.5’s original C++ COLLADA
 
 ## [2.0.0] — 2026-11-23
 
-Feature slice (not tagged as a standalone zip). Export fidelity toward the original Blender 4.5 COLLADA exporter so round-tripped scenes keep the same data, plus import of skinned COLLADA files that previously produced only joint Empties. First installable combined zip is **2.0.2**; current zip is **2.0.3**.
+Feature slice (not tagged as a standalone zip). Export fidelity toward the original Blender 4.5 COLLADA exporter so round-tripped scenes keep the same data, plus import of skinned COLLADA files that previously produced only joint Empties. First installable combined zip is **2.0.2**; current zip is **2.0.4**.
 
 **Root cause.** Geometry wrote VERTEX and NORMAL at the same primitive offset, so only one averaged vertex normal survived and flat/smooth shading was lost. Vertex colors were never written. Scene nodes were anonymous, so object names dropped. Meshes came from unevaluated `Object.data` (no modifiers, no curve conversion). Armatures were skipped entirely (`obj_type_handlers` had no ARMATURE), so skins/weights never left Blender. Texture Copy defaulted off. pycollada omitted the XML declaration. Transmission reused the diffuse map as `<transparent>`, which other tools treat as an opacity texture.
 
@@ -185,6 +192,7 @@ First snapshot published in this repository.
 - Initial packaging direction: ship **pycollada by default** via Blender extension wheels so users are not required to pip-install for normal use
 - Early Blender 5.x operator / preferences scaffolding (superseded by 1.0.2+ packaging in this repo)
 
+[2.0.4]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.4
 [2.0.3]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.3
 [2.0.2]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.2
 [2.0.1]: https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/releases/tag/v2.0.1

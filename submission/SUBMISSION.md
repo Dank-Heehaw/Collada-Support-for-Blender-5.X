@@ -1,14 +1,14 @@
-# Blender Extensions Platform — 2.0.3 **update** checklist
+# Blender Extensions Platform — 2.0.4 **update** checklist
 
 Live listing: https://extensions.blender.org/add-ons/collada-support/  
-Package id: `collada_support` (already published as **1.2.2**). This is **Upload new version**, not a first-time Submit.
+Package id: `collada_support` (already published). This is **Upload new version**, not a first-time Submit.
 
 Full tracking checkboxes: [agent.md](../agent.md). Listing copy: [DESCRIPTION.md](DESCRIPTION.md). Version history: [CHANGELOG.md](../CHANGELOG.md).
 
 | Field | Value |
 | --- | --- |
 | Package id | `collada_support` — **do not change** |
-| Version | `2.0.3` |
+| Version | `2.0.4` |
 | Display name | Collada Support |
 | Tagline | `COLLADA (.dae) import and export for Blender 5` (47 chars, no end punctuation) |
 | Maintainer (manifest) | `Collada Support for Blender 5.X` (no email in repo files) |
@@ -29,7 +29,7 @@ Full tracking checkboxes: [agent.md](../agent.md). Listing copy: [DESCRIPTION.md
    Direct: https://extensions.blender.org/add-ons/collada-support/manage/versions/new/  
    Do **not** use https://extensions.blender.org/submit/ — it rejects duplicate `id`.
 3. Upload `dist/blender_collada_support.zip`.
-4. Confirm the form reads version **2.0.3** and compatibility **Blender 5.0.0**.
+4. Confirm the form reads version **2.0.4** and compatibility **Blender 5.0.0**.
 5. Paste the fields below. Re-attach media if the form is empty.
 6. Submit for review. Wait for moderation (no listing fee).
 7. After approval: Blender → Get Extensions → Check for Updates.
@@ -58,21 +58,22 @@ Website / docs (`website` in the manifest):
 https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X
 ```
 
-## 4. Version release notes (Markdown) — paste this 2.0.3 excerpt
+## 4. Version release notes (Markdown) — paste from `RELEASE_NOTES_2.0.4.md`
 
 ```
-## [2.0.3] — 2026-11-23
+# Collada Support 2.0.4
 
-Current installable release. Rewrites mesh export on Blender’s Mesh API (obj.to_mesh / evaluated mesh, vertices, polygons, loops, uv_layers, color_attributes, loop_triangles). BMesh is no longer imported or used in the exporter, so Blender 5 cannot hit `'BMLoopSeq' object has no attribute 'ensure_lookup_table'`. The shipped Python has no ensure_lookup_table calls (only a warning comment on encode_mesh).
+## Changes
 
-Includes everything from 2.0.2: skin import (#3), 2.0.0 export fidelity, 2.0.1 Blender 4.5 operator/ID/skin/morph alignment, and FBX-style collapsible File Browser panels (Include, Transform, Geometry, Armature, Animation, Extra). Cabinet Vision draft work is not in this line.
+- **Texture Copy:** relative Blender image paths (`//tex.png`) now copy correctly on Windows. Export uses `bpy.path.abspath` / `bpy.path.basename` instead of `os.path.basename`, which treated `//` as a UNC path and produced an empty filename.
+- **Scripted export:** `bpy.ops.export_scene.collada(filepath=...)` without `directory=` no longer fails with an empty-path `WinError 3`. The output directory is derived from `filepath` when needed, and created if missing.
 
-Install: remove the old add-on, quit Blender fully, then Install from Disk (or update from Get Extensions). Confirm Preferences shows 2.0.3.
+**Install:** remove the old add-on, quit Blender fully, then **Install from Disk** `blender_collada_support.zip` from Releases (not GitHub **Code → Download ZIP**). Confirm Preferences shows **2.0.4**.
 
-Full changelog (2.0.0–2.0.3 and earlier): https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/blob/master/CHANGELOG.md
+**Full changelog** (2.0.0–2.0.4 and earlier): https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/blob/master/CHANGELOG.md
 ```
 
-(Source of truth remains the **[2.0.3]** section of [CHANGELOG.md](../CHANGELOG.md).)
+(Source of truth remains the **[2.0.4]** section of [CHANGELOG.md](../CHANGELOG.md).)
 
 ## 5. Icon (256×256 PNG)
 
@@ -94,7 +95,7 @@ Full changelog (2.0.0–2.0.3 and earlier): https://github.com/Dank-Heehaw/Colla
 submission/
   SUBMISSION.md              ← this update checklist (paste values)
   DESCRIPTION.md             ← form: Description
-  RELEASE_NOTES_2.0.3.md     ← form: Version release notes (also in CHANGELOG)
+  RELEASE_NOTES_2.0.4.md     ← form: Version release notes (also in CHANGELOG)
   icon.png                   ← 256×256
   featured.png               ← 1920×1080
   preview_import.png         ← 1920×1080 (preview)

@@ -514,20 +514,28 @@ class ColladaExport :
         self._export_textures = bool(kwargs.get("use_texture_copies", True))
         self._add_blender_extensions = bool(kwargs.get("use_blender_profile", True))
         self._filepath = filepath
-        self._dir = directory
-        self._ext_files_map = {}
-        self._ext_files_revmap = {}
-        # Atomic write: build into a temp path, then replace the destination.
-        # Prefer the destination directory so os.replace stays on the same volume.
-        out_dir = None
+        # File Browser fills directory=; scripted bpy.ops.export_scene.collada(filepath=...)
+        # often leaves it empty. Derive from filepath so tempfile / texture copies never get "".
+        out_dir = ""
         if directory and os.path.isdir(directory) :
             out_dir = directory
         else :
             parent = os.path.dirname(filepath)
-            if parent and os.path.isdir(parent) :
+            if parent :
                 out_dir = parent
             #end if
         #end if
+        if not out_dir :
+            out_dir = os.getcwd()
+        #end if
+        # Scripted exports often target a folder that does not exist yet; create it
+        # so tempfile can stay on the same volume and os.replace does not get WinError 3.
+        os.makedirs(out_dir, exist_ok = True)
+        self._dir = out_dir
+        self._ext_files_map = {}
+        self._ext_files_revmap = {}
+        # Atomic write: build into a temp path, then replace the destination.
+        # Prefer the destination directory so os.replace stays on the same volume.
         fd, self._temp_filepath = tempfile.mkstemp(
             suffix = ".zae" if self._is_zae else ".dae",
             prefix = ".collada_export_",
@@ -695,7 +703,7 @@ class ColladaExport :
         self._collada.assetInfo.upaxis = "Z_UP"
         try :
             self._collada.assetInfo.contributors[0].authoring_tool = \
-                "Blender %s Collada Support 2.0.3" % bpy.app.version_string
+                "Blender %s Collada Support 2.0.4" % bpy.app.version_string
         except Exception :
             pass
         #end try
@@ -1963,16 +1971,29 @@ class ColladaExport :
                           )
                         if len(teximage) != 0 :
                             teximage = teximage[0].image
+                            # Blender relative paths use "//". On Windows, os.path.basename("//tex.png")
+                            # treats that as a UNC path and returns "" — texture copy then opens the
+                            # export directory. Resolve with bpy.path, then take a real filename.
+                            src_path = bpy.path.abspath(
+                                teximage.filepath, library = teximage.library
+                            )
+                            filename = bpy.path.basename(teximage.filepath)
+                            if not filename :
+                                filename = os.path.basename(src_path)
+                            #end if
+                            if not filename :
+                                filename = bpy.path.clean_name(teximage.name) or "texture"
+                            #end if
                             if teximage.packed_file != None :
                                 contents = teximage.packed_file.data
                             else :
-                                contents = open(bpy.path.abspath(teximage.filepath), "rb").read()
+                                contents = open(src_path, "rb").read()
                             #end if
                             out_filepath = self.write_ext_file \
                               (
                                 category = EXT_FILE.TEXTURE,
                                 obj_name = teximage.name,
-                                filename = os.path.basename(teximage.filepath),
+                                filename = filename,
                                 contents = contents
                               )
                             img_id = translate_id(teximage.name)

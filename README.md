@@ -2,7 +2,7 @@
 
 Restores **COLLADA** import and export for Blender 5 after native OpenCOLLADA support was removed.
 
-**Current version: 2.0.3** — Mesh-API export (no BMesh), skin import, Blender 4.5-aligned options, FBX-style File Browser panels. History: **[CHANGELOG.md](CHANGELOG.md)**. Agent brief / remaining work: **[agent.md](agent.md)**.
+**Current version: 2.0.4** — Mesh-API export (no BMesh), relative texture-copy fix on Windows, scripted `directory=` fallback, skin import, Blender 4.5-aligned options, FBX-style File Browser panels. History: **[CHANGELOG.md](CHANGELOG.md)**. Agent brief / remaining work: **[agent.md](agent.md)**.
 
 **Project:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X  
 **Issues:** https://github.com/Dank-Heehaw/Collada-Support-for-Blender-5.X/issues  
@@ -19,7 +19,7 @@ Do **not** use GitHub **Code → Download ZIP** (source tree, not installable).
 1. In Blender 5: **Edit → Preferences → Add-ons → Install from Disk…**
 2. Select **`blender_collada_support.zip`**. Do not extract it first.
 3. Enable **Collada Support**. **pycollada is bundled** — no pip install.
-4. If you already had an older zip: **Remove** the add-on, **quit Blender fully**, then Install from Disk again. Confirm Preferences shows **2.0.3**.
+4. If you already had an older zip: **Remove** the add-on, **quit Blender fully**, then Install from Disk again. Confirm Preferences shows **2.0.4**.
 
 Menus: **File → Import → COLLADA (.dae, .zae, .kmz, .zip)** and **File → Export → COLLADA (.dae, .zae)**.
 

@@ -23,7 +23,7 @@
 bl_info = {
     "name": "Collada Support",
     "author": "Waheed Khan, Collada Support for Blender 5.X",
-    "version": (2, 0, 3),
+    "version": (2, 0, 4),
     "blender": (5, 0, 0),
     "location": "File > Import, File > Export",
     "description": "Import and export COLLADA (.dae / .zae) after native support was removed in Blender 5",
@@ -542,6 +542,9 @@ class EXPORT_OT_collada(bpy.types.Operator, ExportHelper):
         from . import export_collada
 
         kwargs = self.as_keywords(ignore=("filter_glob", "prop_bc_export_ui_section"))
+        # Scripted calls often omit directory=; derive it from filepath so export never sees "".
+        if not kwargs.get("directory"):
+            kwargs["directory"] = os.path.dirname(kwargs.get("filepath") or "")
         if os.path.exists(self.filepath) and not os.path.isfile(self.filepath):
             self.report({"ERROR"}, f"Not a file: {kwargs['filepath']}")
             return {"CANCELLED"}
